@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Wick",
+    "slug": "wick-app",
+    "version": "1.0.0",
+    "scheme": "wick",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F0D1A"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.maximallearning.wick"
+    },
+    "android": {
+      "package": "com.maximallearning.wick",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F0D1A"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ]
+  }
+}
