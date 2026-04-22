@@ -115,7 +115,7 @@ The original wireframes (web-only React) are preserved in the root for reference
 
 | File | Flow |
 |---|---|
-| remixed-5dd5d894.tsx | Onboarding (chat-based prototype) |
+| remixed-5dd5d894.tsx | Onbocdarding (chat-based prototype) |
 | remixed-62d2925e.tsx | Planning flow |
 | remixed-6e5967c4.tsx | Proactive guidance flow |
 
