@@ -1,8 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { router } from 'expo-router';
+import { jwtDecode } from 'jwt-decode';
 import { Colors } from '@/constants/colors';
 import { Fonts, FontSizes } from '@/constants/typography';
+import { useAuthStore } from '@/src/stores/authStore';
+import { getMe } from '@/src/api/users';
 
 const HOLD_MS = 1500;
 const FADE_MS = 650;
@@ -56,9 +59,42 @@ export default function SplashScreen() {
     pulse(dot2, 180);
     pulse(dot3, 360);
 
-    // Navigate after hold time — replaced by real auth check in production
-    const nav = setTimeout(() => router.replace('/(onboarding)'), HOLD_MS);
-    return () => clearTimeout(nav);
+    // Auth gate: runs in parallel with the animation.
+    // Navigation fires when BOTH the gate resolves AND HOLD_MS has elapsed.
+    let destination = '/(auth)/login';
+
+    async function determineDestination() {
+      await useAuthStore.getState().hydrate();
+      const { token } = useAuthStore.getState();
+      if (!token) return;
+
+      try {
+        const { exp } = jwtDecode<{ exp: number }>(token);
+        if (exp * 1000 < Date.now()) {
+          useAuthStore.getState().clearAuth();
+          return;
+        }
+      } catch {
+        useAuthStore.getState().clearAuth();
+        return;
+      }
+
+      try {
+        const user = await getMe();
+        destination = user.onboarding_complete ? '/(tabs)/chat' : '/(onboarding)';
+      } catch {
+        // Network failure — fall back to login
+      }
+    }
+
+    let cancelled = false;
+    const minWait = new Promise<void>((resolve) => setTimeout(resolve, HOLD_MS));
+
+    Promise.all([determineDestination(), minWait]).then(() => {
+      if (!cancelled) router.replace(destination as any);
+    });
+
+    return () => { cancelled = true; };
   }, []);
 
   return (

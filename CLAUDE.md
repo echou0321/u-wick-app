@@ -95,15 +95,21 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `components/chat/ChatInput.tsx`, `TypingIndicator.tsx` — keep, minor cleanup only
 - `components/chat/ChatBubble.tsx` — keep shell; strip prototype-only fields (`isProactive`, `isUpload`, `isCanvas`, `showStatusCard`, `showChecklist`), add markdown rendering
 
-### Built this session
-- `app/splash.tsx` — animated splash with glow orbs, spring entrance, staggered loading dots; see Section 5 of design doc for full spec
+### Built
+- `app/splash.tsx` — animated splash with glow orbs, spring entrance, staggered loading dots; real auth gate (SecureStore hydrate → JWT expiry check → `GET /users/me` → navigate); min 1500ms display, navigation fires when both gate + timer resolve
 - `app/index.tsx` — redirects to `/splash`
-- `app/_layout.tsx` — has `<Stack.Screen name="splash" />` + `QueryClientProvider`; still needs auth gate
-- `src/types/api.ts` — all API interfaces (`User`, `Course`, `Task`, `ScheduleBlock`, `HeatEntry`, `Major`, `MajorGoal`, `ChatMessage`, `SyllabusMeta`, `IcsStatus`) + type aliases (`FlowMode`, `EnrollmentStatus`, etc.)
+- `app/_layout.tsx` — `QueryClientProvider` + `AppProvider` (prototype compat); Stack registers `(auth)`, `(onboarding)`, `(tabs)`; auth gate lives in `splash.tsx`
+- `app/(auth)/_layout.tsx` — auth group Stack with fade animation
+- `app/(auth)/login.tsx` — email + password form; inline field validation; 401 error message; navigates to `/(tabs)/chat` or `/(onboarding)` based on `onboarding_complete`
+- `app/(auth)/register.tsx` — display_name + email + password + confirm; length + match validation; 409 error message; navigates to `/(onboarding)` on success
+- `src/api/auth.ts` — `login()`, `register()`
+- `src/api/users.ts` — `getMe()`
+- `src/api/client.ts` — Axios instance with JWT interceptor + 401 → `clearAuth`
 - `src/stores/authStore.ts` — token + userId; `setAuth` / `clearAuth` / `hydrate` (reads SecureStore on launch)
 - `src/stores/chatStore.ts` — activeFlow + per-flow message histories
 - `src/stores/uiStore.ts` — heatMap / offline / wizard state; `heatMapVisible` + `wizardCompleted` persisted to AsyncStorage
-- `src/api/client.ts` — Axios instance with JWT interceptor + 401 → `clearAuth`
+- `src/styles/forms.ts` — shared `StyleSheet` for the card/form/input/button pattern used by auth + onboarding screens
+- `src/types/api.ts` — all API interfaces (`User`, `Course`, `Task`, `ScheduleBlock`, `HeatEntry`, `Major`, `MajorGoal`, `ChatMessage`, `SyllabusMeta`, `IcsStatus`) + type aliases (`FlowMode`, `EnrollmentStatus`, etc.)
 
 ### Prototype screens (migrate, don't extend)
 These exist but are wired to mock data and use the wrong architecture (AppContext + useState). Refactor each one when its step comes up in What's Next:
@@ -124,14 +130,13 @@ These exist but are wired to mock data and use the wrong architecture (AppContex
 ---
 
 ## What's Next (in order)
-1. **Auth screens** — `app/(auth)/login.tsx`, `app/(auth)/register.tsx`; rewrite `app/_layout.tsx` auth gate (SecureStore → JWT expiry → onboarding_complete → wizardCompleted → destination); wire to `POST /auth/register` and `POST /auth/login`; store JWT in SecureStore + authStore
-2. **Onboarding migration** — replace 3-screen prototype flow with `(onboarding)/profile.tsx` (current_quarter, enrollment_status, major; PATCH /me) and `(onboarding)/notifications.tsx` (push permission + PATCH /me/push-token + POST /me/onboarding/complete + POST /sessions/start)
-3. **Tab layout migration** — delete Home tab; rename tabs to Chat/TODO/Schedule/Profile; convert flat `.tsx` files to subdirectory `index.tsx` files; swap emoji icons for Ionicons; add tab bar hide pattern for nested screens
-4. **Coach mark wizard** — `src/wizard/` overlay; Steps 1–3; ICS connect in step 1; AsyncStorage persistence
-5. **TODO tab** — migrate Tasks screen to `todo/index.tsx`; wire to `useTasks`; add TaskFilterBar, swipe delete, pull-to-refresh; create `todo/[id].tsx` task detail
-6. **Schedule tab** — migrate Plan screen to `schedule/index.tsx`; wire to `useSchedule` + `useHeat`; add WeekCalendar + HeatMapBar + block CRUD bottom sheets
-7. **Chat tab** — migrate Chat screen to `chat/index.tsx`; wire to `useChatHistory` + `chatStore`; add FlowPill + ShortcutBar; SSE path disabled until API key arrives
-8. **Profile tab** — new `profile/index.tsx`; wire to `useUser`; enrollment-gated Major Goals link; ICS status + sync; push notification toggle; logout; create edit/courses/syllabus-upload/major-goals sub-screens
-9. **Session logging** — wire `useSession` hook to all session events throughout the app
-10. **Chat SSE** — unblock and wire `useChatStream` once Anthropic API key received; apply side effect optimistic updates
-11. **Syllabus confirm** — unblock once Anthropic API key received
+1. **Onboarding migration** — replace 3-screen prototype flow with `(onboarding)/profile.tsx` (current_quarter, enrollment_status, major; PATCH /me) and `(onboarding)/notifications.tsx` (push permission + PATCH /me/push-token + POST /me/onboarding/complete + POST /sessions/start); delete `(onboarding)/index.tsx`, `upload.tsx`, `connect.tsx`; update auth screens to navigate to `/(onboarding)/profile` instead of `/(onboarding)`
+2. **Tab layout migration** — delete Home tab; rename tabs to Chat/TODO/Schedule/Profile; convert flat `.tsx` files to subdirectory `index.tsx` files; swap emoji icons for Ionicons; add tab bar hide pattern for nested screens; delete `context/AppContext.tsx`, `hooks/useChatEngine.ts`, `data/`, `components/dashboard/`, `types/index.ts`; move `components/` into `src/components/`
+3. **Coach mark wizard** — `src/wizard/` overlay; Steps 1–3; ICS connect in step 1; AsyncStorage persistence
+4. **TODO tab** — migrate Tasks screen to `todo/index.tsx`; wire to `useTasks`; add TaskFilterBar, swipe delete, pull-to-refresh; create `todo/[id].tsx` task detail
+5. **Schedule tab** — migrate Plan screen to `schedule/index.tsx`; wire to `useSchedule` + `useHeat`; add WeekCalendar + HeatMapBar + block CRUD bottom sheets
+6. **Chat tab** — migrate Chat screen to `chat/index.tsx`; wire to `useChatHistory` + `chatStore`; add FlowPill + ShortcutBar; SSE path disabled until API key arrives
+7. **Profile tab** — new `profile/index.tsx`; wire to `useUser`; enrollment-gated Major Goals link; ICS status + sync; push notification toggle; logout; create edit/courses/syllabus-upload/major-goals sub-screens
+8. **Session logging** — wire `useSession` hook to all session events throughout the app
+9. **Chat SSE** — unblock and wire `useChatStream` once Anthropic API key received; apply side effect optimistic updates
+10. **Syllabus confirm** — unblock once Anthropic API key received
