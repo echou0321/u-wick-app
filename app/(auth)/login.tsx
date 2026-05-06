@@ -46,7 +46,7 @@ export default function LoginScreen() {
       if (data.user.onboarding_complete) {
         router.replace('/(tabs)/chat');
       } else {
-        router.replace('/(onboarding)');
+        router.replace('/(onboarding)/profile');
       }
     } catch (err: any) {
       setApiError(

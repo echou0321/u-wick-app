@@ -86,64 +86,52 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 
 ## What's Built
 
-**Project is initialized** — Expo 54, RN 0.81, Expo Router v6, TypeScript strict. A UI prototype exists (demo-quality, not production architecture). New sessions should treat it as a migration target, not a foundation to extend.
+**Foundation complete** — Expo 54, RN 0.81, Expo Router v6, TypeScript strict. Prototype files fully removed. All active code lives under `src/` or `app/`.
 
-### Reusable as-is
-- `constants/colors.ts` — full design system palette, finalized
-- `constants/typography.ts` — Syne + DM Sans font config, finalized
-- `components/ui/Card.tsx`, `Badge.tsx` — generic, keep
-- `components/chat/ChatInput.tsx`, `TypingIndicator.tsx` — keep, minor cleanup only
-- `components/chat/ChatBubble.tsx` — keep shell; strip prototype-only fields (`isProactive`, `isUpload`, `isCanvas`, `showStatusCard`, `showChecklist`), add markdown rendering
+### Constants (finalized, do not modify)
+- `constants/colors.ts` — full design system palette
+- `constants/typography.ts` — Syne + DM Sans font config
 
 ### Built
 - `app/splash.tsx` — animated splash with glow orbs, spring entrance, staggered loading dots; real auth gate (SecureStore hydrate → JWT expiry check → `GET /users/me` → navigate); min 1500ms display, navigation fires when both gate + timer resolve
 - `app/index.tsx` — redirects to `/splash`
-- `app/_layout.tsx` — `QueryClientProvider` + `AppProvider` (prototype compat); Stack registers `(auth)`, `(onboarding)`, `(tabs)`; auth gate lives in `splash.tsx`
+- `app/_layout.tsx` — `QueryClientProvider`; Stack registers `(auth)`, `(onboarding)`, `(tabs)`; auth gate lives in `splash.tsx`
 - `app/(auth)/_layout.tsx` — auth group Stack with fade animation
-- `app/(auth)/login.tsx` — email + password form; inline field validation; 401 error message; navigates to `/(tabs)/chat` or `/(onboarding)` based on `onboarding_complete`
-- `app/(auth)/register.tsx` — display_name + email + password + confirm; length + match validation; 409 error message; navigates to `/(onboarding)` on success
+- `app/(auth)/login.tsx` — email + password form; inline field validation; 401 error message; navigates to `/(tabs)/chat` or `/(onboarding)/profile` based on `onboarding_complete`
+- `app/(auth)/register.tsx` — display_name + email + password + confirm; length + match validation; 409 error message; navigates to `/(onboarding)/profile` on success
+- `app/(onboarding)/_layout.tsx` — onboarding group Stack, slide animation
+- `app/(onboarding)/profile.tsx` — current_quarter + enrollment_status segmented control + optional major; `PATCH /users/me`; navigates to `/notifications`
+- `app/(onboarding)/notifications.tsx` — 3 feature rows; "Enable Notifications" requests OS permission + Expo push token + `PATCH /users/me/push-token`; "Skip for now" path; both paths call `POST /users/me/onboarding/complete` + fire-and-forget `POST /sessions/start` → `/(tabs)/chat`
+- `app/(tabs)/_layout.tsx` — 4 tabs: Chat / TODO / Schedule / Profile; Ionicons; styles from `src/styles/tabs.ts`
+- `app/(tabs)/chat/index.tsx` — skeleton (Step 6)
+- `app/(tabs)/todo/index.tsx` — skeleton (Step 4)
+- `app/(tabs)/schedule/index.tsx` — skeleton (Step 5)
+- `app/(tabs)/profile/index.tsx` — skeleton (Step 7)
 - `src/api/auth.ts` — `login()`, `register()`
-- `src/api/users.ts` — `getMe()`
+- `src/api/users.ts` — `getMe()`, `updateMe()`, `completeOnboarding()`, `updatePushToken()`
+- `src/api/sessions.ts` — `startSession()`, `logEvent()`, `endSession()`
 - `src/api/client.ts` — Axios instance with JWT interceptor + 401 → `clearAuth`
 - `src/stores/authStore.ts` — token + userId; `setAuth` / `clearAuth` / `hydrate` (reads SecureStore on launch)
 - `src/stores/chatStore.ts` — activeFlow + per-flow message histories
 - `src/stores/uiStore.ts` — heatMap / offline / wizard state; `heatMapVisible` + `wizardCompleted` persisted to AsyncStorage
-- `src/styles/forms.ts` — shared `StyleSheet` for the card/form/input/button pattern used by auth + onboarding screens
+- `src/styles/forms.ts` — `formStyles`: card/form/input/button pattern (auth + onboarding screens)
+- `src/styles/components.ts` — `cardStyles`, `badgeStyles`: generic UI components
+- `src/styles/chat.ts` — `bubbleStyles`, `inputStyles`, `typingStyles`: chat components
+- `src/styles/tabs.ts` — `tabScreenStyles`, `tabBarStyles`: tab screens + tab bar
+- `src/components/ui/Card.tsx`, `Badge.tsx` — generic, pull styles from `components.ts`
+- `src/components/chat/ChatBubble.tsx` — stripped of prototype fields; uses `ChatMessage` from `src/types/api`; markdown rendering pending (Step 6)
+- `src/components/chat/ChatInput.tsx` — `onSend` + `disabled` prop; pull styles from `chat.ts`
+- `src/components/chat/TypingIndicator.tsx` — staggered dot animation; pull styles from `chat.ts`
 - `src/types/api.ts` — all API interfaces (`User`, `Course`, `Task`, `ScheduleBlock`, `HeatEntry`, `Major`, `MajorGoal`, `ChatMessage`, `SyllabusMeta`, `IcsStatus`) + type aliases (`FlowMode`, `EnrollmentStatus`, etc.)
-
-### Cleanup Waves
-
-Prototype files use AppContext + useState and mock data — never extend them. Delete/replace at the step noted.
-
-**Wave 1 — during onboarding migration (What's Next step 1):**
-- `app/(onboarding)/index.tsx` → replaced by `(onboarding)/profile.tsx`
-- `app/(onboarding)/upload.tsx` → delete (syllabus upload moves to Profile tab)
-- `app/(onboarding)/connect.tsx` → delete (ICS connect moves to wizard Step 1)
-- Update auth screens: change `/(onboarding)` navigation target to `/(onboarding)/profile`
-
-**Wave 2 — during tab layout migration (What's Next step 2):**
-- `app/(tabs)/home.tsx` → delete (no Home tab in spec)
-- `app/(tabs)/chat.tsx` → replaced by `chat/index.tsx`
-- `app/(tabs)/tasks.tsx` → replaced by `todo/index.tsx`
-- `app/(tabs)/plan.tsx` → replaced by `schedule/index.tsx`
-- `context/AppContext.tsx` → delete; remove `AppProvider` from `app/_layout.tsx`
-- `hooks/useChatEngine.ts` → delete
-- `data/mock-state.ts`, `data/chat-scripts.ts`, `data/mock-responses.ts` → delete
-- `components/dashboard/` (HeroCard, AlertCard, TaskRow, ScheduleItem) → delete
-- `types/index.ts` → delete (superseded by `src/types/api.ts`)
-- `App.tsx` (root) → delete (dead code; entry point is `expo-router/entry`)
-- `components/ui/`, `components/chat/` → move into `src/components/`
 
 ---
 
 ## What's Next (in order)
-1. **Onboarding migration** — replace 3-screen prototype flow with `(onboarding)/profile.tsx` (current_quarter, enrollment_status, major; PATCH /me) and `(onboarding)/notifications.tsx` (push permission + PATCH /me/push-token + POST /me/onboarding/complete + POST /sessions/start); delete `(onboarding)/index.tsx`, `upload.tsx`, `connect.tsx`; update auth screens to navigate to `/(onboarding)/profile` instead of `/(onboarding)`
-2. **Tab layout migration** — delete Home tab; rename tabs to Chat/TODO/Schedule/Profile; convert flat `.tsx` files to subdirectory `index.tsx` files; swap emoji icons for Ionicons; add tab bar hide pattern for nested screens; delete `context/AppContext.tsx`, `hooks/useChatEngine.ts`, `data/`, `components/dashboard/`, `types/index.ts`; move `components/` into `src/components/`
-3. **Coach mark wizard** — `src/wizard/` overlay; Steps 1–3; ICS connect in step 1; AsyncStorage persistence
-4. **TODO tab** — migrate Tasks screen to `todo/index.tsx`; wire to `useTasks`; add TaskFilterBar, swipe delete, pull-to-refresh; create `todo/[id].tsx` task detail
-5. **Schedule tab** — migrate Plan screen to `schedule/index.tsx`; wire to `useSchedule` + `useHeat`; add WeekCalendar + HeatMapBar + block CRUD bottom sheets
-6. **Chat tab** — migrate Chat screen to `chat/index.tsx`; wire to `useChatHistory` + `chatStore`; add FlowPill + ShortcutBar; SSE path disabled until API key arrives
-7. **Profile tab** — new `profile/index.tsx`; wire to `useUser`; enrollment-gated Major Goals link; ICS status + sync; push notification toggle; logout; create edit/courses/syllabus-upload/major-goals sub-screens
-8. **Session logging** — wire `useSession` hook to all session events throughout the app
-9. **Chat SSE** — unblock and wire `useChatStream` once Anthropic API key received; apply side effect optimistic updates
-10. **Syllabus confirm** — unblock once Anthropic API key received
+1. **Coach mark wizard** — `src/wizard/` overlay; Steps 1–3; ICS connect in step 1; AsyncStorage persistence
+2. **TODO tab** — replace skeleton in `todo/index.tsx`; wire to `useTasks`; add TaskFilterBar, swipe delete, pull-to-refresh; create `todo/[id].tsx` task detail
+3. **Schedule tab** — replace skeleton in `schedule/index.tsx`; wire to `useSchedule` + `useHeat`; add WeekCalendar + HeatMapBar + block CRUD bottom sheets
+4. **Chat tab** — replace skeleton in `chat/index.tsx`; wire to `useChatHistory` + `chatStore`; add FlowPill + ShortcutBar; SSE path disabled until API key arrives
+5. **Profile tab** — replace skeleton in `profile/index.tsx`; wire to `useUser`; enrollment-gated Major Goals link; ICS status + sync; push notification toggle; logout; create edit/courses/syllabus-upload/major-goals sub-screens
+6. **Session logging** — wire `useSession` hook to all session events throughout the app
+7. **Chat SSE** — unblock and wire `useChatStream` once Anthropic API key received; apply side effect optimistic updates
+8. **Syllabus confirm** — unblock once Anthropic API key received

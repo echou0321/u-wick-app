@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { View, Text, ViewStyle } from 'react-native';
 import { Colors } from '@/constants/colors';
-import { Fonts, FontSizes } from '@/constants/typography';
+import { badgeStyles as styles } from '@/src/styles/components';
 
 interface BadgeProps {
   label: string;
@@ -30,17 +30,3 @@ export function Badge({ label, variant = 'primary', style }: BadgeProps) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  badge: {
-    borderRadius: 8,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    alignSelf: 'flex-start',
-  },
-  text: {
-    fontFamily: Fonts.bodyMedium,
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-  },
-});

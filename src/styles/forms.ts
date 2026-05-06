@@ -123,4 +123,35 @@ export const formStyles = StyleSheet.create({
     fontSize: FontSizes.sm,
     color: Colors.primary,
   },
+  segmentedRow: {
+    flexDirection: 'row' as const,
+    gap: 8,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    backgroundColor: Colors.surfaceRaised,
+    alignItems: 'center' as const,
+  },
+  segmentActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  segmentText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+  },
+  segmentTextActive: {
+    color: Colors.white,
+  },
+  helperText: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.xs,
+    color: Colors.textMuted,
+    marginTop: 4,
+  },
 });
