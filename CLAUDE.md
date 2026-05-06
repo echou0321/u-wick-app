@@ -111,21 +111,28 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `src/styles/forms.ts` — shared `StyleSheet` for the card/form/input/button pattern used by auth + onboarding screens
 - `src/types/api.ts` — all API interfaces (`User`, `Course`, `Task`, `ScheduleBlock`, `HeatEntry`, `Major`, `MajorGoal`, `ChatMessage`, `SyllabusMeta`, `IcsStatus`) + type aliases (`FlowMode`, `EnrollmentStatus`, etc.)
 
-### Prototype screens (migrate, don't extend)
-These exist but are wired to mock data and use the wrong architecture (AppContext + useState). Refactor each one when its step comes up in What's Next:
-- `app/(tabs)/home.tsx` — **delete**; no Home tab in spec
-- `app/(tabs)/chat.tsx` → becomes `app/(tabs)/chat/index.tsx`
-- `app/(tabs)/tasks.tsx` → becomes `app/(tabs)/todo/index.tsx`
-- `app/(tabs)/plan.tsx` → becomes `app/(tabs)/schedule/index.tsx`
-- `app/(onboarding)/index.tsx` → becomes `app/(onboarding)/profile.tsx`
-- `app/(onboarding)/upload.tsx` — **delete**; syllabus upload moves to Profile tab
-- `app/(onboarding)/connect.tsx` — **delete**; ICS connect moves to wizard Step 1
+### Cleanup Waves
 
-### Delete when Zustand + React Query are in place
-- `context/AppContext.tsx`
-- `hooks/useChatEngine.ts`
-- `data/mock-state.ts`, `data/chat-scripts.ts`, `data/mock-responses.ts`
-- `components/dashboard/` (HeroCard, AlertCard, TaskRow, ScheduleItem) — Home tab components, no longer needed
+Prototype files use AppContext + useState and mock data — never extend them. Delete/replace at the step noted.
+
+**Wave 1 — during onboarding migration (What's Next step 1):**
+- `app/(onboarding)/index.tsx` → replaced by `(onboarding)/profile.tsx`
+- `app/(onboarding)/upload.tsx` → delete (syllabus upload moves to Profile tab)
+- `app/(onboarding)/connect.tsx` → delete (ICS connect moves to wizard Step 1)
+- Update auth screens: change `/(onboarding)` navigation target to `/(onboarding)/profile`
+
+**Wave 2 — during tab layout migration (What's Next step 2):**
+- `app/(tabs)/home.tsx` → delete (no Home tab in spec)
+- `app/(tabs)/chat.tsx` → replaced by `chat/index.tsx`
+- `app/(tabs)/tasks.tsx` → replaced by `todo/index.tsx`
+- `app/(tabs)/plan.tsx` → replaced by `schedule/index.tsx`
+- `context/AppContext.tsx` → delete; remove `AppProvider` from `app/_layout.tsx`
+- `hooks/useChatEngine.ts` → delete
+- `data/mock-state.ts`, `data/chat-scripts.ts`, `data/mock-responses.ts` → delete
+- `components/dashboard/` (HeroCard, AlertCard, TaskRow, ScheduleItem) → delete
+- `types/index.ts` → delete (superseded by `src/types/api.ts`)
+- `App.tsx` (root) → delete (dead code; entry point is `expo-router/entry`)
+- `components/ui/`, `components/chat/` → move into `src/components/`
 
 ---
 
