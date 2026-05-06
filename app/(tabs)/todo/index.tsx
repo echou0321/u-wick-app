@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -28,6 +28,8 @@ import { connectIcs } from '@/src/api/ics';
 import { useAuthStore } from '@/src/stores/authStore';
 import type { Task } from '@/src/types/api';
 
+type SortOrder = 'due_date' | 'weight';
+
 function isThisWeek(dueDate: string | null): boolean {
   if (!dueDate) return false;
   const due = new Date(dueDate);
@@ -36,15 +38,37 @@ function isThisWeek(dueDate: string | null): boolean {
   return due <= weekFromNow;
 }
 
+function isOverdue(task: Task): boolean {
+  if (!task.due_date || task.done) return false;
+  const due = new Date(task.due_date);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return due < today;
+}
+
 function applyFilter(tasks: Task[], filter: TaskFilter): Task[] {
-  if (filter === 'highlighted') return tasks.filter((t) => t.highlighted);
+  if (filter === 'starred') return tasks.filter((t) => t.highlighted);
   if (filter === 'week') return tasks.filter((t) => isThisWeek(t.due_date));
+  if (filter === 'overdue') return tasks.filter(isOverdue);
   return tasks;
+}
+
+function sortTasks(tasks: Task[], order: SortOrder): Task[] {
+  return [...tasks].sort((a, b) => {
+    if (order === 'weight') return b.weight - a.weight;
+    if (!a.due_date && !b.due_date) return 0;
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+  });
 }
 
 export default function TodoScreen() {
   const [filter, setFilter] = useState<TaskFilter>('all');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('due_date');
   const [showCompleted, setShowCompleted] = useState(false);
+  const [undoTask, setUndoTask] = useState<Task | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ICS import modal state
   const [icsModalVisible, setIcsModalVisible] = useState(false);
@@ -52,18 +76,65 @@ export default function TodoScreen() {
   const [icsUrlError, setIcsUrlError] = useState('');
   const [connecting, setConnecting] = useState(false);
 
+  // Add task coming-soon modal
+  const [addTaskModalVisible, setAddTaskModalVisible] = useState(false);
+
   const qc = useQueryClient();
   const clearAuth = useAuthStore((s) => s.clearAuth);
 
   const { data: activeTasks, isLoading, refetch, isRefetching } = useTasks({ done: false });
   const { data: doneTasks } = useTasks({ done: true });
-  const { mutate: updateTask } = useUpdateTask();
+  const { mutate: updateTask, mutateAsync: updateTaskAsync } = useUpdateTask();
   const { mutate: deleteTask } = useDeleteTask();
 
   const filtered = applyFilter(activeTasks ?? [], filter);
+  const sorted = sortTasks(filtered, sortOrder);
   const listData: Task[] = showCompleted
-    ? [...filtered, ...(doneTasks ?? [])]
-    : filtered;
+    ? [...sorted, ...(doneTasks ?? [])]
+    : sorted;
+
+  const overdueList = applyFilter(activeTasks ?? [], 'overdue');
+
+  function handleUndo() {
+    if (!undoTask) return;
+    updateTask({ id: undoTask.id, body: { done: false } });
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoTask(null);
+  }
+
+  function handleSortPress() {
+    Alert.alert('Sort tasks', undefined, [
+      {
+        text: `${sortOrder === 'due_date' ? '✓ ' : ''}By due date`,
+        onPress: () => setSortOrder('due_date'),
+      },
+      {
+        text: `${sortOrder === 'weight' ? '✓ ' : ''}By weight (heaviest first)`,
+        onPress: () => setSortOrder('weight'),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
+
+  async function handleMarkAllOverdueDone() {
+    if (overdueList.length === 0) return;
+    Alert.alert(
+      'Mark all overdue as done?',
+      `This will mark ${overdueList.length} task${overdueList.length !== 1 ? 's' : ''} as complete.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mark all done',
+          onPress: async () => {
+            await Promise.all(
+              overdueList.map((t) => updateTaskAsync({ id: t.id, body: { done: true } })),
+            );
+            qc.invalidateQueries({ queryKey: ['tasks'] });
+          },
+        },
+      ],
+    );
+  }
 
   async function handleConnectIcs() {
     const trimmed = icsUrl.trim();
@@ -115,6 +186,20 @@ export default function TodoScreen() {
     [updateTask],
   );
 
+  const handleToggleDone = useCallback(
+    (task: Task) => {
+      if (!task.done) {
+        updateTask({ id: task.id, body: { done: true } });
+        setUndoTask(task);
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        undoTimerRef.current = setTimeout(() => setUndoTask(null), 3000);
+      } else {
+        updateTask({ id: task.id, body: { done: false } });
+      }
+    },
+    [updateTask],
+  );
+
   const handleDelete = useCallback(
     (task: Task) => {
       if (task.source === 'ics') {
@@ -149,7 +234,8 @@ export default function TodoScreen() {
     const messages: Record<TaskFilter, { title: string; body: string }> = {
       all: { title: 'No tasks yet', body: 'Connect Canvas to pull in your assignments.' },
       week: { title: 'Nothing due this week', body: 'Enjoy the breather.' },
-      highlighted: { title: 'No starred tasks', body: 'Tap the star on a task to highlight it.' },
+      overdue: { title: 'No overdue tasks', body: "You're all caught up." },
+      starred: { title: 'No starred tasks', body: 'Tap the star on a task to highlight it.' },
     };
     const { title, body } = messages[filter];
     return (
@@ -173,6 +259,12 @@ export default function TodoScreen() {
       <View style={[ts.header, ts.headerRow]}>
         <Text style={ts.title}>TODO</Text>
         <View style={m.headerActions}>
+          <TouchableOpacity onPress={() => setAddTaskModalVisible(true)} hitSlop={8}>
+            <Ionicons name="add-circle-outline" size={22} color={Colors.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleSortPress} hitSlop={8}>
+            <Ionicons name="swap-vertical-outline" size={22} color={Colors.textSecondary} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={openIcsModal} hitSlop={8}>
             <Ionicons name="cloud-download-outline" size={22} color={Colors.textSecondary} />
           </TouchableOpacity>
@@ -187,6 +279,14 @@ export default function TodoScreen() {
 
       <TaskFilterBar active={filter} onChange={setFilter} />
 
+      {/* Mark all overdue done — only shown on Overdue tab */}
+      {filter === 'overdue' && overdueList.length > 0 && (
+        <TouchableOpacity style={s.markAllBtn} onPress={handleMarkAllOverdueDone} activeOpacity={0.8}>
+          <Ionicons name="checkmark-done-outline" size={16} color={Colors.textSecondary} />
+          <Text style={s.markAllBtnText}>Mark all {overdueList.length} as done</Text>
+        </TouchableOpacity>
+      )}
+
       {isLoading ? (
         <View style={ts.centered}>
           <ActivityIndicator color={Colors.primary} />
@@ -200,6 +300,7 @@ export default function TodoScreen() {
               task={item}
               onPress={() => router.push(`/(tabs)/todo/${item.id}`)}
               onToggleStar={() => handleToggleStar(item)}
+              onToggleDone={() => handleToggleDone(item)}
               onDelete={() => handleDelete(item)}
             />
           )}
@@ -221,6 +322,16 @@ export default function TodoScreen() {
           refreshing={isRefetching}
           contentContainerStyle={listData.length === 0 ? { flex: 1 } : undefined}
         />
+      )}
+
+      {/* Undo toast */}
+      {undoTask && (
+        <View style={s.undoToast}>
+          <Text style={s.undoToastText}>Marked as done</Text>
+          <TouchableOpacity style={s.undoBtn} onPress={handleUndo}>
+            <Text style={s.undoBtnText}>Undo</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* ICS import modal */}
@@ -272,6 +383,38 @@ export default function TodoScreen() {
             </TouchableOpacity>
           </TouchableOpacity>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Add task — coming soon modal */}
+      <Modal
+        visible={addTaskModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAddTaskModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={m.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setAddTaskModalVisible(false)}
+        >
+          <TouchableOpacity style={m.modalCard} activeOpacity={1}>
+            <View style={m.comingSoonIcon}>
+              <Ionicons name="construct-outline" size={28} color={Colors.primary} />
+            </View>
+            <Text style={m.modalTitle}>Add task</Text>
+            <Text style={m.modalBody}>
+              Manual task creation is coming soon. For now, tasks are imported from your Canvas
+              calendar or added by U-Wick during chat.
+            </Text>
+            <TouchableOpacity
+              style={m.connectBtn}
+              onPress={() => setAddTaskModalVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={m.connectBtnText}>Got it</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );
@@ -366,5 +509,16 @@ const m = StyleSheet.create({
     fontFamily: Fonts.body,
     fontSize: FontSizes.base,
     color: Colors.textMuted,
+  },
+  comingSoonIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
 });

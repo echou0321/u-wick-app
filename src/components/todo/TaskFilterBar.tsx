@@ -1,12 +1,13 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { todoStyles as s } from '@/src/styles/todo';
 
-export type TaskFilter = 'all' | 'week' | 'highlighted';
+export type TaskFilter = 'all' | 'week' | 'overdue' | 'starred';
 
 const FILTERS: { key: TaskFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'week', label: 'This Week' },
-  { key: 'highlighted', label: 'Highlighted' },
+  { key: 'overdue', label: 'Overdue' },
+  { key: 'starred', label: 'Starred' },
 ];
 
 interface Props {

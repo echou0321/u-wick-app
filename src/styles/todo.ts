@@ -129,6 +129,84 @@ export const todoStyles = StyleSheet.create({
     paddingHorizontal: 40,
   },
 
+  // ── Done checkbox ─────────────────────────────────────────────
+  checkBox: {
+    width: 22,
+    height: 22,
+    marginRight: 14,
+    marginTop: 1,
+    flexShrink: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // ── Mark all overdue done ─────────────────────────────────────
+  markAllBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 4,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  markAllBtnText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+  },
+
+  // ── Sort header row ───────────────────────────────────────────
+  sortRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  sortLabel: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.xs,
+    color: Colors.textMuted,
+  },
+
+  // ── Undo toast ────────────────────────────────────────────────
+  undoToast: {
+    position: 'absolute' as const,
+    bottom: 16,
+    left: 20,
+    right: 20,
+    flexDirection: 'row' as const,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  undoToastText: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+  },
+  undoBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  undoBtnText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.primary,
+  },
+
   // ── Show completed toggle ─────────────────────────────────────
   completedRow: {
     flexDirection: 'row',

@@ -43,10 +43,11 @@ interface Props {
   task: Task;
   onPress: () => void;
   onToggleStar: () => void;
+  onToggleDone: () => void;
   onDelete: () => void;
 }
 
-export default function TaskRow({ task, onPress, onToggleStar, onDelete }: Props) {
+export default function TaskRow({ task, onPress, onToggleStar, onToggleDone, onDelete }: Props) {
   const swipeRef = useRef<Swipeable>(null);
   const { label: dueDateLabel, urgent } = formatDueDate(task.due_date);
   const wColor = weightColor(task.weight);
@@ -77,7 +78,13 @@ export default function TaskRow({ task, onPress, onToggleStar, onDelete }: Props
   return (
     <Swipeable ref={swipeRef} renderRightActions={renderRightActions} rightThreshold={40}>
       <TouchableOpacity style={s.row} onPress={onPress} activeOpacity={0.7}>
-        <View style={s.dot} />
+        <TouchableOpacity style={s.checkBox} onPress={onToggleDone} hitSlop={8}>
+          <Ionicons
+            name={task.done ? 'checkmark-circle' : 'ellipse-outline'}
+            size={22}
+            color={task.done ? Colors.primary : Colors.textMuted}
+          />
+        </TouchableOpacity>
         <View style={s.taskContent}>
           <Text style={[s.taskTitle, task.done && s.taskTitleDone]} numberOfLines={2}>
             {task.title}

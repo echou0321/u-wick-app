@@ -60,7 +60,8 @@ This table reflects state as of 2026-05-02 — update when backend "What's Built
 | Auth | POST /auth/register, POST /auth/login | ✅ Build now |
 | User profile | GET /me, PATCH /me, POST /me/onboarding/complete, PATCH /me/push-token | ✅ Build now |
 | ICS | POST /ics/connect, POST /ics/sync, GET /ics/status | ✅ Build now |
-| Tasks | GET /tasks, PATCH /tasks/:id, DELETE /tasks/:id | ✅ Build now |
+| Tasks (read/edit) | GET /tasks, PATCH /tasks/:id, DELETE /tasks/:id | ✅ Build now |
+| Task creation | POST /tasks | ⏳ Not yet in backend — frontend shows coming-soon stub; implement form when route ships |
 | Schedule | GET /schedule, POST/PATCH/DELETE /schedule/blocks, GET /schedule/heat | ✅ Build now |
 | Sessions | POST /sessions/start, POST /sessions/event, POST /sessions/end | ✅ Build now |
 | Majors | GET /majors, GET /majors/:id | ✅ Build now |
@@ -105,7 +106,7 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `app/(onboarding)/notifications.tsx` — 3 feature rows; "Enable Notifications" requests OS permission + Expo push token + `PATCH /users/me/push-token`; "Skip for now" path; both paths call `POST /users/me/onboarding/complete` + fire-and-forget `POST /sessions/start` → `/(tabs)/chat`
 - `app/(tabs)/_layout.tsx` — 4 tabs: Chat / TODO / Schedule / Profile; Ionicons; wraps Tabs in View + mounts `<CoachMarkWizard />` as absolute overlay
 - `app/(tabs)/chat/index.tsx` — skeleton
-- `app/(tabs)/todo/index.tsx` — **built**: task list with All/This Week/Highlighted filter bar, pull-to-refresh, star toggle, swipe-to-delete (hard delete for manual/ai/syllabus; soft delete for ICS), show-completed toggle, ICS import modal (cloud icon in header + CTA in empty state), `__DEV__`-only sign-out icon in header
+- `app/(tabs)/todo/index.tsx` — **built**: task list with All/This Week/Overdue/Starred filter bar, pull-to-refresh, bidirectional done toggle (checkbox on each row + undo toast), sort by due date or weight (header icon), mark-all-overdue-done bulk action, swipe-to-delete (hard delete for manual/ai/syllabus; soft delete for ICS), show-completed toggle, ICS import modal (cloud icon in header + CTA in empty state), "Add task" stub button (shows coming-soon modal — `POST /tasks` not yet in backend), `__DEV__`-only sign-out icon in header
 - `app/(tabs)/todo/[id].tsx` — **built**: task detail; done toggle, due date, type label, source badge, disabled "Break this down" button, delete/remove action
 - `app/(tabs)/schedule/index.tsx` — skeleton
 - `app/(tabs)/profile/index.tsx` — skeleton
@@ -123,13 +124,13 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `src/styles/chat.ts` — `bubbleStyles`, `inputStyles`, `typingStyles`: chat components
 - `src/styles/tabs.ts` — `tabScreenStyles`, `tabBarStyles`: tab screens + tab bar
 - `src/styles/wizard.ts` — `wizardStyles`: overlay, spotlight, slide-up card, feature rows
-- `src/styles/todo.ts` — `todoStyles`: filter bar, task row, swipe action, empty state, detail screen
+- `src/styles/todo.ts` — `todoStyles`: filter bar, task row (incl. `checkBox`), swipe action, empty state, `markAllBtn`, `sortRow`, `undoToast`, detail screen
 - `src/components/ui/Card.tsx`, `Badge.tsx` — generic, pull styles from `components.ts`
 - `src/components/chat/ChatBubble.tsx` — stripped of prototype fields; uses `ChatMessage` from `src/types/api`; markdown rendering pending
 - `src/components/chat/ChatInput.tsx` — `onSend` + `disabled` prop; pull styles from `chat.ts`
 - `src/components/chat/TypingIndicator.tsx` — staggered dot animation; pull styles from `chat.ts`
-- `src/components/todo/TaskFilterBar.tsx` — All / This Week / Highlighted pill filter; `TaskFilter` type exported
-- `src/components/todo/TaskRow.tsx` — swipeable row; title, due date (relative + urgent colour), weight badge, star toggle; swipe-left = delete action
+- `src/components/todo/TaskFilterBar.tsx` — All / This Week / Overdue / Starred pill filter; `TaskFilter` type exported
+- `src/components/todo/TaskRow.tsx` — swipeable row; circular done checkbox (bidirectional), title, due date (relative + urgent colour), weight badge, star toggle; swipe-left = delete action
 - `src/types/api.ts` — all API interfaces (`User`, `Course`, `Task`, `ScheduleBlock`, `HeatEntry`, `Major`, `MajorGoal`, `ChatMessage`, `SyllabusMeta`, `IcsStatus`) + type aliases (`FlowMode`, `EnrollmentStatus`, etc.)
 - `src/wizard/CoachMarkWizard.tsx` — orchestrator; reads `wizardCompleted`; calls `startWizard()` on mount; navigates to Schedule tab (step 1) and Chat tab (step 2) via `router.navigate`
 - `src/wizard/WizardStep1.tsx` — Canvas connect; dark backdrop + calendar spotlight + `Animated` slide-up card + ICS URL modal with validation + `KeyboardAvoidingView` so keyboard doesn't cover input; `POST /ics/connect` → Alert → `advanceWizard()`
@@ -141,20 +142,17 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 
 ## What's Next (in order)
 
-### 1. TODO tab — finish remaining items (PARTIALLY BUILT — do these before moving on)
+### 1. TODO tab — remaining gaps
 
-The core list and detail screens are built. These known gaps still need to be addressed:
-
-**a) Overdue task display** — ICS-imported tasks that are past due but not marked `done` show as "Overdue" in the list, even if the student already submitted the assignment in Canvas (Canvas ICS feed doesn't include completion status). Three options were discussed — pick one:
-- **Option A** *(1-line fix)*: Change default filter from `'all'` to `'week'` in `todo/index.tsx` so the user lands on upcoming tasks by default.
-- **Option B** *(recommended quick fix)*: In the "All" filter, hide tasks whose `due_date` is more than 7 days in the past. Add a "Show X older tasks" toggle at the top of the list to reveal them. Keeps the list clean without losing data.
-- **Option C** *(most complete)*: Split the "All" list into two `SectionList` sections — **Upcoming** (due today or later) and **Overdue (N)** (past due, starts collapsed). Best long-term UX but more build effort.
+**a) ✅ Overdue display** — resolved via dedicated Overdue filter tab + mark-all bulk action.
 
 **b) Course grouping** — Design spec calls for tasks grouped by course with the course name as a section header and a colour dot. Currently a flat list because `GET /tasks` returns `course_id` only (no course name/colour). Options: confirm whether the backend joins course data on the tasks response, or fetch `GET /courses` (check backend readiness), or group by `course_id` with a truncated label for now.
 
 **c) `SubtaskRow` component** — `src/components/todo/SubtaskRow.tsx` not yet built; needed for the subtask checklist in `todo/[id].tsx` once the `breakdown_task` side effect is unblocked.
 
-**d) No `GET /tasks/:id` endpoint** — `todo/[id].tsx` reads the task from the React Query cache (any tasks query). Works fine when navigating from the list. Edge case: if the user deep-links directly to a task detail URL and neither `done=false` nor `done=true` query has been fetched yet, the screen shows a spinner indefinitely. Low priority for now.
+**d) No `GET /tasks/:id` endpoint** — `todo/[id].tsx` reads the task from the React Query cache. Edge case: deep-linking directly to a task detail with no prior list fetch shows a spinner indefinitely. Low priority for now.
+
+**e) "Add task" backend route** — `POST /tasks` is not yet in the backend. The "Add task" `+` button in the TODO header currently shows a coming-soon modal explaining that tasks come from Canvas or U-Wick chat. When the backend ships this route, remove the modal and implement the create form (fields: title, due_date, weight/type, course_id).
 
 ### 2. Schedule tab — `schedule/index.tsx` skeleton
 Create `src/api/schedule.ts` + `src/hooks/useSchedule.ts` + `useHeat.ts`; add `WeekCalendar`, `HeatMapBar`, `BlockCard` components; block CRUD bottom sheets.
