@@ -9,6 +9,7 @@ interface UIStore {
   wizardCompleted: boolean;
   toggleHeatMap: () => void;
   setOfflineMode: (v: boolean) => void;
+  startWizard: () => void;
   advanceWizard: () => void;
   completeWizard: () => void;
 }
@@ -22,6 +23,7 @@ export const useUIStore = create<UIStore>()(
       wizardCompleted: false,
       toggleHeatMap: () => set((s) => ({ heatMapVisible: !s.heatMapVisible })),
       setOfflineMode: (v) => set({ offlineMode: v }),
+      startWizard: () => set({ wizardStep: 1 }),
       advanceWizard: () =>
         set((s) => ({
           wizardStep: Math.min(s.wizardStep + 1, 3) as 0 | 1 | 2 | 3,

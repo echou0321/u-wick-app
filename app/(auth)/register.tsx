@@ -66,11 +66,12 @@ export default function RegisterScreen() {
         router.replace('/(onboarding)/profile');
       }
     } catch (err: any) {
-      setApiError(
-        err?.response?.status === 409
-          ? 'An account with that email already exists'
-          : 'Something went wrong. Please try again.',
-      );
+      if (err?.response?.status === 409) {
+        setApiError('An account with that email already exists');
+      } else {
+        const msg = err?.response?.data?.message;
+        setApiError(msg ?? 'Something went wrong. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

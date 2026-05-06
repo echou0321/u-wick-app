@@ -1,0 +1,233 @@
+import { StyleSheet } from 'react-native';
+import { Colors } from '@/constants/colors';
+import { Fonts, FontSizes } from '@/constants/typography';
+
+export const todoStyles = StyleSheet.create({
+  // ── Filter bar ──────────────────────────────────────────────
+  filterBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  filterPillActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  filterPillText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+  },
+  filterPillTextActive: {
+    color: Colors.white,
+  },
+
+  // ── Task row ─────────────────────────────────────────────────
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.bg,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+    marginRight: 14,
+    marginTop: 2,
+    flexShrink: 0,
+  },
+  taskContent: {
+    flex: 1,
+  },
+  taskTitle: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+    marginBottom: 4,
+  },
+  taskTitleDone: {
+    color: Colors.textMuted,
+    textDecorationLine: 'line-through' as const,
+  },
+  taskMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap' as const,
+    gap: 6,
+  },
+  dueDate: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.sm,
+    color: Colors.textMuted,
+  },
+  dueDateUrgent: {
+    color: '#F76A6A',
+  },
+  weightBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  weightBadgeText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.xs,
+  },
+  starBtn: {
+    padding: 8,
+    marginLeft: 4,
+    flexShrink: 0,
+  },
+
+  // ── Swipe delete action ───────────────────────────────────────
+  deleteAction: {
+    backgroundColor: '#C0392B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+  },
+  deleteActionText: {
+    color: '#FFF',
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.xs,
+    marginTop: 3,
+  },
+
+  // ── Empty state ───────────────────────────────────────────────
+  emptyWrap: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontFamily: Fonts.headingBold,
+    fontSize: FontSizes.lg,
+    color: Colors.textSecondary,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  emptyBody: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: 40,
+  },
+
+  // ── Show completed toggle ─────────────────────────────────────
+  completedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 18,
+  },
+  completedRowText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.textMuted,
+  },
+
+  // ── Detail screen ─────────────────────────────────────────────
+  detailScroll: {
+    flex: 1,
+  },
+  detailBody: {
+    padding: 20,
+  },
+  detailCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 16,
+    gap: 14,
+  },
+  detailRow: {
+    gap: 4,
+  },
+  detailLabel: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.xs,
+    color: Colors.textMuted,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+  },
+  detailValue: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+  },
+  doneToggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  doneToggleLabel: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+  },
+  sourceBadge: {
+    alignSelf: 'flex-start' as const,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  sourceBadgeText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.xs,
+  },
+  breakdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 14,
+    marginBottom: 16,
+    opacity: 0.4,
+  },
+  breakdownBtnText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.base,
+    color: Colors.textSecondary,
+  },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.accentRed,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#4A1A0E',
+    paddingVertical: 14,
+    marginBottom: 32,
+  },
+  deleteBtnText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.base,
+    color: '#F76A6A',
+  },
+});

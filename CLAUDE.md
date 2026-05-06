@@ -95,43 +95,81 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 ### Built
 - `app/splash.tsx` — animated splash with glow orbs, spring entrance, staggered loading dots; real auth gate (SecureStore hydrate → JWT expiry check → `GET /users/me` → navigate); min 1500ms display, navigation fires when both gate + timer resolve
 - `app/index.tsx` — redirects to `/splash`
-- `app/_layout.tsx` — `QueryClientProvider`; Stack registers `(auth)`, `(onboarding)`, `(tabs)`; auth gate lives in `splash.tsx`
+- `app/_layout.tsx` — `GestureHandlerRootView` (outermost) + `QueryClientProvider`; Stack registers `(auth)`, `(onboarding)`, `(tabs)`; auth gate lives in `splash.tsx`
+- `babel.config.js` — `babel-preset-expo` + `react-native-reanimated/plugin` (required for reanimated v4 / bottom sheets)
 - `app/(auth)/_layout.tsx` — auth group Stack with fade animation
 - `app/(auth)/login.tsx` — email + password form; inline field validation; 401 error message; navigates to `/(tabs)/chat` or `/(onboarding)/profile` based on `onboarding_complete`
 - `app/(auth)/register.tsx` — display_name + email + password + confirm; length + match validation; 409 error message; navigates to `/(onboarding)/profile` on success
 - `app/(onboarding)/_layout.tsx` — onboarding group Stack, slide animation
 - `app/(onboarding)/profile.tsx` — current_quarter + enrollment_status segmented control + optional major; `PATCH /users/me`; navigates to `/notifications`
 - `app/(onboarding)/notifications.tsx` — 3 feature rows; "Enable Notifications" requests OS permission + Expo push token + `PATCH /users/me/push-token`; "Skip for now" path; both paths call `POST /users/me/onboarding/complete` + fire-and-forget `POST /sessions/start` → `/(tabs)/chat`
-- `app/(tabs)/_layout.tsx` — 4 tabs: Chat / TODO / Schedule / Profile; Ionicons; styles from `src/styles/tabs.ts`
-- `app/(tabs)/chat/index.tsx` — skeleton (Step 6)
-- `app/(tabs)/todo/index.tsx` — skeleton (Step 4)
-- `app/(tabs)/schedule/index.tsx` — skeleton (Step 5)
-- `app/(tabs)/profile/index.tsx` — skeleton (Step 7)
+- `app/(tabs)/_layout.tsx` — 4 tabs: Chat / TODO / Schedule / Profile; Ionicons; wraps Tabs in View + mounts `<CoachMarkWizard />` as absolute overlay
+- `app/(tabs)/chat/index.tsx` — skeleton
+- `app/(tabs)/todo/index.tsx` — **built**: task list with All/This Week/Highlighted filter bar, pull-to-refresh, star toggle, swipe-to-delete (hard delete for manual/ai/syllabus; soft delete for ICS), show-completed toggle, ICS import modal (cloud icon in header + CTA in empty state), `__DEV__`-only sign-out icon in header
+- `app/(tabs)/todo/[id].tsx` — **built**: task detail; done toggle, due date, type label, source badge, disabled "Break this down" button, delete/remove action
+- `app/(tabs)/schedule/index.tsx` — skeleton
+- `app/(tabs)/profile/index.tsx` — skeleton
 - `src/api/auth.ts` — `login()`, `register()`
 - `src/api/users.ts` — `getMe()`, `updateMe()`, `completeOnboarding()`, `updatePushToken()`
 - `src/api/sessions.ts` — `startSession()`, `logEvent()`, `endSession()`
+- `src/api/ics.ts` — `connectIcs()`, `syncIcs()`, `getIcsStatus()`
+- `src/api/tasks.ts` — `getTasks()`, `updateTask()`, `deleteTask()`
 - `src/api/client.ts` — Axios instance with JWT interceptor + 401 → `clearAuth`
 - `src/stores/authStore.ts` — token + userId; `setAuth` / `clearAuth` / `hydrate` (reads SecureStore on launch)
 - `src/stores/chatStore.ts` — activeFlow + per-flow message histories
-- `src/stores/uiStore.ts` — heatMap / offline / wizard state; `heatMapVisible` + `wizardCompleted` persisted to AsyncStorage
+- `src/stores/uiStore.ts` — heatMap / offline / wizard state; `heatMapVisible` + `wizardCompleted` persisted to AsyncStorage; `startWizard()` sets wizardStep to 1
 - `src/styles/forms.ts` — `formStyles`: card/form/input/button pattern (auth + onboarding screens)
 - `src/styles/components.ts` — `cardStyles`, `badgeStyles`: generic UI components
 - `src/styles/chat.ts` — `bubbleStyles`, `inputStyles`, `typingStyles`: chat components
 - `src/styles/tabs.ts` — `tabScreenStyles`, `tabBarStyles`: tab screens + tab bar
+- `src/styles/wizard.ts` — `wizardStyles`: overlay, spotlight, slide-up card, feature rows
+- `src/styles/todo.ts` — `todoStyles`: filter bar, task row, swipe action, empty state, detail screen
 - `src/components/ui/Card.tsx`, `Badge.tsx` — generic, pull styles from `components.ts`
-- `src/components/chat/ChatBubble.tsx` — stripped of prototype fields; uses `ChatMessage` from `src/types/api`; markdown rendering pending (Step 6)
+- `src/components/chat/ChatBubble.tsx` — stripped of prototype fields; uses `ChatMessage` from `src/types/api`; markdown rendering pending
 - `src/components/chat/ChatInput.tsx` — `onSend` + `disabled` prop; pull styles from `chat.ts`
 - `src/components/chat/TypingIndicator.tsx` — staggered dot animation; pull styles from `chat.ts`
+- `src/components/todo/TaskFilterBar.tsx` — All / This Week / Highlighted pill filter; `TaskFilter` type exported
+- `src/components/todo/TaskRow.tsx` — swipeable row; title, due date (relative + urgent colour), weight badge, star toggle; swipe-left = delete action
 - `src/types/api.ts` — all API interfaces (`User`, `Course`, `Task`, `ScheduleBlock`, `HeatEntry`, `Major`, `MajorGoal`, `ChatMessage`, `SyllabusMeta`, `IcsStatus`) + type aliases (`FlowMode`, `EnrollmentStatus`, etc.)
+- `src/wizard/CoachMarkWizard.tsx` — orchestrator; reads `wizardCompleted`; calls `startWizard()` on mount; navigates to Schedule tab (step 1) and Chat tab (step 2) via `router.navigate`
+- `src/wizard/WizardStep1.tsx` — Canvas connect; dark backdrop + calendar spotlight + `Animated` slide-up card + ICS URL modal with validation + `KeyboardAvoidingView` so keyboard doesn't cover input; `POST /ics/connect` → Alert → `advanceWizard()`
+- `src/wizard/WizardStep2.tsx` — chat intro; backdrop + input-bar spotlight + slide-up card; both "Got it" and "Skip" call `advanceWizard()`
+- `src/hooks/useTasks.ts` — `useTasks(filters?)`, `useTask(id)` (cache lookup), `useUpdateTask()`, `useDeleteTask()`
+- `src/wizard/WizardStep3.tsx` — feature discovery; dimmed overlay + tall card with 3 icon/title/body rows; "Let's go" → `completeWizard()` (writes `wizardCompleted: true` to AsyncStorage)
 
 ---
 
 ## What's Next (in order)
-1. **Coach mark wizard** — `src/wizard/` overlay; Steps 1–3; ICS connect in step 1; AsyncStorage persistence
-2. **TODO tab** — replace skeleton in `todo/index.tsx`; wire to `useTasks`; add TaskFilterBar, swipe delete, pull-to-refresh; create `todo/[id].tsx` task detail
-3. **Schedule tab** — replace skeleton in `schedule/index.tsx`; wire to `useSchedule` + `useHeat`; add WeekCalendar + HeatMapBar + block CRUD bottom sheets
-4. **Chat tab** — replace skeleton in `chat/index.tsx`; wire to `useChatHistory` + `chatStore`; add FlowPill + ShortcutBar; SSE path disabled until API key arrives
-5. **Profile tab** — replace skeleton in `profile/index.tsx`; wire to `useUser`; enrollment-gated Major Goals link; ICS status + sync; push notification toggle; logout; create edit/courses/syllabus-upload/major-goals sub-screens
-6. **Session logging** — wire `useSession` hook to all session events throughout the app
-7. **Chat SSE** — unblock and wire `useChatStream` once Anthropic API key received; apply side effect optimistic updates
-8. **Syllabus confirm** — unblock once Anthropic API key received
+
+### 1. TODO tab — finish remaining items (PARTIALLY BUILT — do these before moving on)
+
+The core list and detail screens are built. These known gaps still need to be addressed:
+
+**a) Overdue task display** — ICS-imported tasks that are past due but not marked `done` show as "Overdue" in the list, even if the student already submitted the assignment in Canvas (Canvas ICS feed doesn't include completion status). Three options were discussed — pick one:
+- **Option A** *(1-line fix)*: Change default filter from `'all'` to `'week'` in `todo/index.tsx` so the user lands on upcoming tasks by default.
+- **Option B** *(recommended quick fix)*: In the "All" filter, hide tasks whose `due_date` is more than 7 days in the past. Add a "Show X older tasks" toggle at the top of the list to reveal them. Keeps the list clean without losing data.
+- **Option C** *(most complete)*: Split the "All" list into two `SectionList` sections — **Upcoming** (due today or later) and **Overdue (N)** (past due, starts collapsed). Best long-term UX but more build effort.
+
+**b) Course grouping** — Design spec calls for tasks grouped by course with the course name as a section header and a colour dot. Currently a flat list because `GET /tasks` returns `course_id` only (no course name/colour). Options: confirm whether the backend joins course data on the tasks response, or fetch `GET /courses` (check backend readiness), or group by `course_id` with a truncated label for now.
+
+**c) `SubtaskRow` component** — `src/components/todo/SubtaskRow.tsx` not yet built; needed for the subtask checklist in `todo/[id].tsx` once the `breakdown_task` side effect is unblocked.
+
+**d) No `GET /tasks/:id` endpoint** — `todo/[id].tsx` reads the task from the React Query cache (any tasks query). Works fine when navigating from the list. Edge case: if the user deep-links directly to a task detail URL and neither `done=false` nor `done=true` query has been fetched yet, the screen shows a spinner indefinitely. Low priority for now.
+
+### 2. Schedule tab — `schedule/index.tsx` skeleton
+Create `src/api/schedule.ts` + `src/hooks/useSchedule.ts` + `useHeat.ts`; add `WeekCalendar`, `HeatMapBar`, `BlockCard` components; block CRUD bottom sheets.
+
+### 3. Chat tab — `chat/index.tsx` skeleton
+Create `src/hooks/useChatHistory.ts`; add `FlowPill`, `ShortcutBar`; wire `chatStore`; SSE path disabled until Anthropic API key arrives.
+
+### 4. Profile tab — `profile/index.tsx` skeleton
+Wire to `useUser`; enrollment-gated Major Goals link; ICS status + sync; push notification toggle; logout; create `edit`, `courses`, `syllabus-upload`, `major-goals` sub-screens.
+
+### 5. Session logging
+Wire `useSession` hook to all session events throughout the app.
+
+### 6. Chat SSE
+Unblock and wire `useChatStream` once Anthropic API key received; apply side effect optimistic updates.
+
+### 7. Syllabus confirm
+Unblock once Anthropic API key received.
