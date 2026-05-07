@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { tabScreenStyles as ts } from '@/src/styles/tabs';
 import { todoStyles as s } from '@/src/styles/todo';
-import { useTask, useUpdateTask, useDeleteTask, useTasks } from '@/src/hooks/useTasks';
+import { useTask, useUpdateTask, useDeleteTask, useTasks, useSubtasks, useBreakdownTask } from '@/src/hooks/useTasks';
+import SubtaskRow from '@/src/components/todo/SubtaskRow';
 import type { TaskSource } from '@/src/types/api';
 
 const SOURCE_LABELS: Record<TaskSource, string> = {
@@ -44,13 +45,15 @@ function weightLabel(weight: number): string {
 export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  // Ensure both queries are warm so useTask can find from cache
+  // Warm both caches so useTask can find the task without a dedicated GET /tasks/:id
   useTasks({ done: false });
   useTasks({ done: true });
 
   const task = useTask(id);
+  const { data: subtasks = [] } = useSubtasks(id);
   const { mutate: updateTask, isPending: isUpdating } = useUpdateTask();
   const { mutate: deleteTask, isPending: isDeleting } = useDeleteTask();
+  const { mutate: breakdown, isPending: isBreakingDown } = useBreakdownTask();
 
   if (!task) {
     return (
@@ -146,13 +149,34 @@ export default function TaskDetailScreen() {
           </View>
         </View>
 
-        {/* Disabled breakdown button */}
-        <TouchableOpacity style={s.breakdownBtn} disabled activeOpacity={1}>
-          <Ionicons name="sparkles-outline" size={18} color={Colors.textSecondary} />
-          <Text style={s.breakdownBtnText}>Break this down</Text>
+        {/* Subtask section — shown once breakdown has been run */}
+        {subtasks.length > 0 && (
+          <View style={s.subtaskSection}>
+            <Text style={s.subtaskSectionTitle}>Subtasks</Text>
+            {subtasks.map((st) => (
+              <SubtaskRow key={st.id} subtask={st} />
+            ))}
+          </View>
+        )}
+
+        {/* Breakdown button */}
+        <TouchableOpacity
+          style={[s.breakdownBtn, isBreakingDown && { opacity: 0.6 }]}
+          onPress={() => breakdown(task.id)}
+          disabled={isBreakingDown || isDeleting || isUpdating}
+          activeOpacity={0.8}
+        >
+          {isBreakingDown ? (
+            <ActivityIndicator size="small" color={Colors.textSecondary} />
+          ) : (
+            <>
+              <Ionicons name="sparkles-outline" size={18} color={Colors.textSecondary} />
+              <Text style={s.breakdownBtnText}>Break this down</Text>
+            </>
+          )}
         </TouchableOpacity>
 
-        {/* Delete */}
+        {/* Delete / remove */}
         <TouchableOpacity
           style={s.deleteBtn}
           onPress={handleDelete}

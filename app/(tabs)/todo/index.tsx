@@ -23,12 +23,19 @@ import { tabScreenStyles as ts } from '@/src/styles/tabs';
 import { todoStyles as s } from '@/src/styles/todo';
 import TaskFilterBar, { TaskFilter } from '@/src/components/todo/TaskFilterBar';
 import TaskRow from '@/src/components/todo/TaskRow';
-import { useTasks, useUpdateTask, useDeleteTask } from '@/src/hooks/useTasks';
+import { useTasks, useUpdateTask, useDeleteTask, useCreateTask } from '@/src/hooks/useTasks';
 import { connectIcs } from '@/src/api/ics';
 import { useAuthStore } from '@/src/stores/authStore';
 import type { Task } from '@/src/types/api';
 
 type SortOrder = 'due_date' | 'weight';
+
+const WEIGHT_OPTIONS = [
+  { label: 'Assignment', value: 1.0 },
+  { label: 'Lab', value: 1.5 },
+  { label: 'Midterm', value: 2.5 },
+  { label: 'Exam', value: 3.0 },
+] as const;
 
 function isThisWeek(dueDate: string | null): boolean {
   if (!dueDate) return false;
@@ -76,8 +83,12 @@ export default function TodoScreen() {
   const [icsUrlError, setIcsUrlError] = useState('');
   const [connecting, setConnecting] = useState(false);
 
-  // Add task coming-soon modal
+  // Add task form
   const [addTaskModalVisible, setAddTaskModalVisible] = useState(false);
+  const [createTitle, setCreateTitle] = useState('');
+  const [createDueDate, setCreateDueDate] = useState('');
+  const [createWeight, setCreateWeight] = useState(1.0);
+  const [createError, setCreateError] = useState('');
 
   const qc = useQueryClient();
   const clearAuth = useAuthStore((s) => s.clearAuth);
@@ -86,6 +97,7 @@ export default function TodoScreen() {
   const { data: doneTasks } = useTasks({ done: true });
   const { mutate: updateTask, mutateAsync: updateTaskAsync } = useUpdateTask();
   const { mutate: deleteTask } = useDeleteTask();
+  const { mutate: createTask, isPending: isCreating } = useCreateTask();
 
   const filtered = applyFilter(activeTasks ?? [], filter);
   const sorted = sortTasks(filtered, sortOrder);
@@ -100,6 +112,38 @@ export default function TodoScreen() {
     updateTask({ id: undoTask.id, body: { done: false } });
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setUndoTask(null);
+  }
+
+  function handleOpenAddTask() {
+    setCreateTitle('');
+    setCreateDueDate('');
+    setCreateWeight(1.0);
+    setCreateError('');
+    setAddTaskModalVisible(true);
+  }
+
+  function handleCreateTask() {
+    const trimmed = createTitle.trim();
+    if (!trimmed) {
+      setCreateError('Please enter a title');
+      return;
+    }
+    let due: string | null = null;
+    if (createDueDate.trim()) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(createDueDate.trim())) {
+        setCreateError('Use YYYY-MM-DD format (e.g. 2026-05-15)');
+        return;
+      }
+      due = createDueDate.trim();
+    }
+    setCreateError('');
+    createTask(
+      { title: trimmed, due_date: due, weight: createWeight },
+      {
+        onSuccess: () => setAddTaskModalVisible(false),
+        onError: () => setCreateError('Failed to create task. Try again.'),
+      },
+    );
   }
 
   function handleSortPress() {
@@ -259,7 +303,7 @@ export default function TodoScreen() {
       <View style={[ts.header, ts.headerRow]}>
         <Text style={ts.title}>TODO</Text>
         <View style={m.headerActions}>
-          <TouchableOpacity onPress={() => setAddTaskModalVisible(true)} hitSlop={8}>
+          <TouchableOpacity onPress={handleOpenAddTask} hitSlop={8}>
             <Ionicons name="add-circle-outline" size={22} color={Colors.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleSortPress} hitSlop={8}>
@@ -385,36 +429,79 @@ export default function TodoScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Add task — coming soon modal */}
+      {/* Add task modal */}
       <Modal
         visible={addTaskModalVisible}
         transparent
         animationType="slide"
         onRequestClose={() => setAddTaskModalVisible(false)}
       >
-        <TouchableOpacity
-          style={m.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setAddTaskModalVisible(false)}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <TouchableOpacity style={m.modalCard} activeOpacity={1}>
-            <View style={m.comingSoonIcon}>
-              <Ionicons name="construct-outline" size={28} color={Colors.primary} />
-            </View>
-            <Text style={m.modalTitle}>Add task</Text>
-            <Text style={m.modalBody}>
-              Manual task creation is coming soon. For now, tasks are imported from your Canvas
-              calendar or added by U-Wick during chat.
-            </Text>
-            <TouchableOpacity
-              style={m.connectBtn}
-              onPress={() => setAddTaskModalVisible(false)}
-              activeOpacity={0.8}
-            >
-              <Text style={m.connectBtnText}>Got it</Text>
+          <TouchableOpacity
+            style={m.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setAddTaskModalVisible(false)}
+          >
+            <TouchableOpacity style={m.modalCard} activeOpacity={1}>
+              <Text style={m.modalTitle}>Add task</Text>
+
+              <Text style={m.formLabel}>Title</Text>
+              <TextInput
+                style={m.input}
+                placeholder="e.g. Midterm study guide"
+                placeholderTextColor={Colors.textMuted}
+                value={createTitle}
+                onChangeText={(t) => { setCreateTitle(t); setCreateError(''); }}
+              />
+
+              <Text style={m.formLabel}>Due date (optional)</Text>
+              <TextInput
+                style={m.input}
+                placeholder="2026-05-15"
+                placeholderTextColor={Colors.textMuted}
+                value={createDueDate}
+                onChangeText={(t) => { setCreateDueDate(t); setCreateError(''); }}
+                keyboardType="numbers-and-punctuation"
+              />
+
+              <Text style={m.formLabel}>Type</Text>
+              <View style={m.weightRow}>
+                {WEIGHT_OPTIONS.map((opt) => (
+                  <TouchableOpacity
+                    key={opt.label}
+                    style={[m.weightPill, createWeight === opt.value && m.weightPillActive]}
+                    onPress={() => setCreateWeight(opt.value)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[m.weightPillText, createWeight === opt.value && m.weightPillTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {createError ? <Text style={m.errorText}>{createError}</Text> : null}
+
+              <TouchableOpacity
+                style={[m.connectBtn, isCreating && { opacity: 0.6 }]}
+                onPress={handleCreateTask}
+                disabled={isCreating}
+                activeOpacity={0.8}
+              >
+                {isCreating
+                  ? <ActivityIndicator color={Colors.white} size="small" />
+                  : <Text style={m.connectBtnText}>Add task</Text>
+                }
+              </TouchableOpacity>
+              <TouchableOpacity style={m.cancelBtn} onPress={() => setAddTaskModalVisible(false)}>
+                <Text style={m.cancelText}>Cancel</Text>
+              </TouchableOpacity>
             </TouchableOpacity>
           </TouchableOpacity>
-        </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -510,15 +597,39 @@ const m = StyleSheet.create({
     fontSize: FontSizes.base,
     color: Colors.textMuted,
   },
-  comingSoonIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
+  formLabel: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.xs,
+    color: Colors.textMuted,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+    marginBottom: 6,
+    marginTop: 12,
+  },
+  weightRow: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 8,
+    marginBottom: 4,
+  },
+  weightPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
+  },
+  weightPillActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  weightPillText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+  },
+  weightPillTextActive: {
+    color: Colors.white,
   },
 });

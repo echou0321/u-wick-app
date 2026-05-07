@@ -325,7 +325,6 @@ export const todoStyles = StyleSheet.create({
     borderColor: Colors.border,
     paddingVertical: 14,
     marginBottom: 16,
-    opacity: 0.4,
   },
   breakdownBtnText: {
     fontFamily: Fonts.bodyMedium,

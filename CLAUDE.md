@@ -111,8 +111,8 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `app/(onboarding)/notifications.tsx` — 3 feature rows; "Enable Notifications" requests OS permission + Expo push token + `PATCH /users/me/push-token`; "Skip for now" path; both paths call `POST /users/me/onboarding/complete` + fire-and-forget `POST /sessions/start` → `/(tabs)/chat`
 - `app/(tabs)/_layout.tsx` — 4 tabs: Chat / TODO / Schedule / Profile; Ionicons; wraps Tabs in View + mounts `<CoachMarkWizard />` as absolute overlay
 - `app/(tabs)/chat/index.tsx` — skeleton
-- `app/(tabs)/todo/index.tsx` — **built**: task list with All/This Week/Overdue/Starred filter bar, pull-to-refresh, bidirectional done toggle (checkbox on each row + undo toast), sort by due date or weight (header icon), mark-all-overdue-done bulk action, swipe-to-delete (hard delete for manual/ai/syllabus; soft delete for ICS), show-completed toggle, ICS import modal (cloud icon in header + CTA in empty state), "Add task" stub button (coming-soon modal — **replace with create form now that POST /tasks is available**), `__DEV__`-only sign-out icon in header
-- `app/(tabs)/todo/[id].tsx` — **built**: task detail; done toggle, due date, type label, source badge, disabled "Break this down" button, delete/remove action
+- `app/(tabs)/todo/index.tsx` — **built**: task list with All/This Week/Overdue/Starred filter bar, pull-to-refresh, bidirectional done toggle (checkbox on each row + undo toast), sort by due date or weight (header icon), mark-all-overdue-done bulk action, swipe-to-delete (hard delete for manual/ai/syllabus; soft delete for ICS), show-completed toggle, ICS import modal (cloud icon in header + CTA in empty state), add-task form (title + optional YYYY-MM-DD due date + weight type pills: Assignment/Lab/Midterm/Exam), `__DEV__`-only sign-out icon in header
+- `app/(tabs)/todo/[id].tsx` — **built**: task detail; done toggle, due date, type label, source badge, active "Break this down" button (loading spinner while pending), subtask section (renders `SubtaskRow` list on breakdown success), delete/remove action
 - `app/(tabs)/schedule/index.tsx` — skeleton
 - `app/(tabs)/profile/index.tsx` — skeleton
 - `src/api/auth.ts` — `login()`, `register()`
@@ -152,11 +152,11 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 
 **a) ✅ Overdue display** — resolved via dedicated Overdue filter tab + mark-all bulk action.
 
-**b) Add task create form** — API/hook layer done (`createTask()`, `useCreateTask()`). Still needed: replace the coming-soon modal in `todo/index.tsx` with the real form (fields: `title`, `due_date` YYYY-MM-DD text input, weight type pills: Assignment 1.0 / Lab 1.5 / Midterm 2.5 / Exam 3.0).
+**b) ✅ Add task create form** — live in `todo/index.tsx`; title + optional due date + weight type pills (Assignment 1.0 / Lab 1.5 / Midterm 2.5 / Exam 3.0).
 
 **c) Course grouping** — Deferred: `GET /tasks` returns `course_id` only; no `GET /courses` endpoint exists. Flat list is acceptable for the user study.
 
-**d) Subtask section + breakdown wiring** — API/hooks/component done (`getSubtasks`, `triggerBreakdown`, `useSubtasks`, `useBreakdownTask`, `SubtaskRow`). Still needed: wire in `todo/[id].tsx` — replace the disabled breakdown button with an active one (loading spinner while pending, shows subtask section on success); also note that `weightLabel` thresholds were fixed in `[id].tsx` and `TaskRow.tsx` (old thresholds 25/15/10/5 were wrong; correct scale is 2.8/2.0/1.3/0.8 for Exam/Midterm/Lab/Assignment).
+**d) ✅ Subtask section + breakdown wiring** — live in `todo/[id].tsx`; active breakdown button with loading spinner; subtask section appears above button after breakdown runs.
 
 **e) No `GET /tasks/:id` endpoint** — `todo/[id].tsx` reads the task from the React Query cache. Edge case: deep-linking directly to a task detail with no prior list fetch shows a spinner indefinitely. Low priority for now.
 
