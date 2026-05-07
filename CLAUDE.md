@@ -47,31 +47,36 @@ For local backend dev: `EXPO_PUBLIC_API_URL=http://localhost:3000/api`
 - Push notification `data` payload shapes: `startThisNow` job sends `{ taskId }` — on notification tap, route to `todo/[id]`; `morningDigest` and `majorReminders` send no task-specific data (route to TODO or Profile tab respectively)
 - All `PATCH` mutations must invalidate their React Query key on success; side effects from SSE must invalidate affected keys after `done` event
 - `req.user.id` pattern from backend maps to JWT payload `id` field — decode with `jwtDecode()` client-side to get userId without an extra API call
+- `PATCH /goals/major/:id/checklist` body uses `{ step_id, completed: bool }` — field is `completed`, not `done` (backend deviation from design doc)
+- `DELETE /tasks/:id` returns 403 for ICS/syllabus/ai-sourced tasks — always check `task.source` before calling delete; use done-toggle (soft remove) for ICS tasks
+- Syllabus route is `POST /syllabus` (not `/syllabus/upload`) — text-paste only, no file upload
+- `DELETE /chat/history` requires `?flow=<flowMode>` query param — omitting it returns 400
+- `POST /tasks` does NOT auto-trigger subtask breakdown — call `POST /tasks/:id/breakdown` separately if needed
 
 ---
 
 ## Backend API Readiness
 
-Cross-reference `../u-wick-server/CLAUDE.md` → **What's Built** for live status.
-This table reflects state as of 2026-05-02 — update when backend "What's Built" changes.
+Backend fully deployed — 166 tests passing, 10 suites. All routes live as of 2026-05-07.
 
 | Feature Group | Backend Routes | Frontend Status |
 |---|---|---|
 | Auth | POST /auth/register, POST /auth/login | ✅ Build now |
 | User profile | GET /me, PATCH /me, POST /me/onboarding/complete, PATCH /me/push-token | ✅ Build now |
-| ICS | POST /ics/connect, POST /ics/sync, GET /ics/status | ✅ Build now |
-| Tasks (read/edit) | GET /tasks, PATCH /tasks/:id, DELETE /tasks/:id | ✅ Build now |
-| Task creation | POST /tasks | ⏳ Not yet in backend — frontend shows coming-soon stub; implement form when route ships |
+| Dashboard | GET /users/me/dashboard → `{ tasks_due_soon, schedule_today, nudges, heat_this_week }` | ✅ Live — no frontend hook yet; useful for profile tab or home preload |
+| ICS | POST /ics/connect, POST /ics/sync, GET /ics/status, DELETE /ics/disconnect | ✅ Build now; DELETE /ics/disconnect hard-deletes all ICS tasks + courses; not yet wired in frontend |
+| Tasks (read/edit) | GET /tasks, PATCH /tasks/:id, DELETE /tasks/:id | ✅ Build now; DELETE returns 403 for ICS/syllabus/ai sources — frontend swipe-delete already handles this |
+| Task creation | POST /tasks | ✅ Live — remove coming-soon modal, implement create form (title, due_date, weight, course_id); does NOT auto-trigger breakdown |
+| Task subtasks | GET /tasks/:id/subtasks, POST /tasks/:id/breakdown | ✅ Both live — build SubtaskRow + useSubtasks hook; wire "Break this down" button |
 | Schedule | GET /schedule, POST/PATCH/DELETE /schedule/blocks, GET /schedule/heat | ✅ Build now |
-| Sessions | POST /sessions/start, POST /sessions/event, POST /sessions/end | ✅ Build now |
-| Majors | GET /majors, GET /majors/:id | ✅ Build now |
-| Goals | POST /goals/major, GET /goals/major, PATCH /goals/major/:id, PATCH /goals/major/:id/checklist | ✅ Build now |
-| Push (receive) | Server-side cron delivery via Expo Push | ✅ Receive + deep link now; EAS Build needed for physical device |
-| Chat (SSE) | POST /chat, GET /chat/history, DELETE /chat/history | ⏳ Blocked — Anthropic API key; build skeleton UI with disabled state |
-| Task breakdown | POST /tasks/:id/breakdown | ⏳ Blocked — Anthropic API key; show disabled "Break this down" button |
-| Syllabus upload | POST /syllabus/upload, GET /syllabus/status/:jobId, POST /syllabus/confirm/:jobId, GET /syllabus | ⏳ Partial — upload + poll UI buildable; confirm step blocked on API key |
-
-When a ⏳ item becomes ✅ in the backend CLAUDE.md, update this table and remove the disabled state from the corresponding frontend component.
+| Sessions | POST /sessions/start, POST /sessions/event, POST /sessions/end | ✅ Live — fire-and-forget calls already in onboarding; wire remaining events throughout app |
+| Majors | GET /majors, GET /majors/:id | ✅ Live — build profile/major-goals screens |
+| Goals | POST /goals/major, GET /goals/major, PATCH /goals/major/:id, PATCH /goals/major/:id/checklist | ✅ Live — checklist PATCH body uses `completed` (not `done`) |
+| Push token | PATCH /me/push-token | ✅ Already wired in onboarding |
+| Push cron delivery | Server-side cron: morning_digest, start_this_now, major_app_reminder | ✅ Live — receive + deep-link handlers can be built now; EAS Build needed for physical device testing |
+| Chat (SSE) | POST /chat, GET /chat/history, DELETE /chat/history | ✅ Fully live — all 7 side-effects wired; build full chat UI; DELETE requires `?flow=` query param or returns 400 |
+| Task breakdown | POST /tasks/:id/breakdown | ✅ Live — remove disabled state, wire button |
+| Syllabus | POST /syllabus (text-paste: `{course_id, quarter, text}`), GET /syllabus/status/:jobId, POST /syllabus/confirm/:jobId, GET /syllabus | ✅ Live — text-paste only (no PDF), response is synchronous `{jobId, tasks}`; build confirm flow |
 
 ---
 
@@ -106,7 +111,7 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `app/(onboarding)/notifications.tsx` — 3 feature rows; "Enable Notifications" requests OS permission + Expo push token + `PATCH /users/me/push-token`; "Skip for now" path; both paths call `POST /users/me/onboarding/complete` + fire-and-forget `POST /sessions/start` → `/(tabs)/chat`
 - `app/(tabs)/_layout.tsx` — 4 tabs: Chat / TODO / Schedule / Profile; Ionicons; wraps Tabs in View + mounts `<CoachMarkWizard />` as absolute overlay
 - `app/(tabs)/chat/index.tsx` — skeleton
-- `app/(tabs)/todo/index.tsx` — **built**: task list with All/This Week/Overdue/Starred filter bar, pull-to-refresh, bidirectional done toggle (checkbox on each row + undo toast), sort by due date or weight (header icon), mark-all-overdue-done bulk action, swipe-to-delete (hard delete for manual/ai/syllabus; soft delete for ICS), show-completed toggle, ICS import modal (cloud icon in header + CTA in empty state), "Add task" stub button (shows coming-soon modal — `POST /tasks` not yet in backend), `__DEV__`-only sign-out icon in header
+- `app/(tabs)/todo/index.tsx` — **built**: task list with All/This Week/Overdue/Starred filter bar, pull-to-refresh, bidirectional done toggle (checkbox on each row + undo toast), sort by due date or weight (header icon), mark-all-overdue-done bulk action, swipe-to-delete (hard delete for manual/ai/syllabus; soft delete for ICS), show-completed toggle, ICS import modal (cloud icon in header + CTA in empty state), "Add task" stub button (coming-soon modal — **replace with create form now that POST /tasks is available**), `__DEV__`-only sign-out icon in header
 - `app/(tabs)/todo/[id].tsx` — **built**: task detail; done toggle, due date, type label, source badge, disabled "Break this down" button, delete/remove action
 - `app/(tabs)/schedule/index.tsx` — skeleton
 - `app/(tabs)/profile/index.tsx` — skeleton
@@ -114,7 +119,7 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `src/api/users.ts` — `getMe()`, `updateMe()`, `completeOnboarding()`, `updatePushToken()`
 - `src/api/sessions.ts` — `startSession()`, `logEvent()`, `endSession()`
 - `src/api/ics.ts` — `connectIcs()`, `syncIcs()`, `getIcsStatus()`
-- `src/api/tasks.ts` — `getTasks()`, `updateTask()`, `deleteTask()`
+- `src/api/tasks.ts` — `getTasks()`, `createTask()`, `updateTask()`, `deleteTask()`, `getSubtasks(taskId)`, `triggerBreakdown(taskId)`
 - `src/api/client.ts` — Axios instance with JWT interceptor + 401 → `clearAuth`
 - `src/stores/authStore.ts` — token + userId; `setAuth` / `clearAuth` / `hydrate` (reads SecureStore on launch)
 - `src/stores/chatStore.ts` — activeFlow + per-flow message histories
@@ -130,12 +135,13 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `src/components/chat/ChatInput.tsx` — `onSend` + `disabled` prop; pull styles from `chat.ts`
 - `src/components/chat/TypingIndicator.tsx` — staggered dot animation; pull styles from `chat.ts`
 - `src/components/todo/TaskFilterBar.tsx` — All / This Week / Overdue / Starred pill filter; `TaskFilter` type exported
-- `src/components/todo/TaskRow.tsx` — swipeable row; circular done checkbox (bidirectional), title, due date (relative + urgent colour), weight badge, star toggle; swipe-left = delete action
-- `src/types/api.ts` — all API interfaces (`User`, `Course`, `Task`, `ScheduleBlock`, `HeatEntry`, `Major`, `MajorGoal`, `ChatMessage`, `SyllabusMeta`, `IcsStatus`) + type aliases (`FlowMode`, `EnrollmentStatus`, etc.)
+- `src/components/todo/TaskRow.tsx` — swipeable row; circular done checkbox (bidirectional), title, due date (relative + urgent colour), weight badge, star toggle; swipe-left = delete action; `weightLabel`/`weightColor` thresholds corrected to real weight scale (2.8/2.0/1.3/0.8)
+- `src/components/todo/SubtaskRow.tsx` — read-only subtask row; checkmark/ellipse icon reflects `done` state; shows `suggested_start` hint if present
+- `src/types/api.ts` — all API interfaces (`User`, `Course`, `Task`, `TaskSubtask`, `ScheduleBlock`, `HeatEntry`, `Major`, `MajorGoal`, `ChatMessage`, `SyllabusMeta`, `IcsStatus`) + type aliases (`FlowMode`, `EnrollmentStatus`, etc.)
 - `src/wizard/CoachMarkWizard.tsx` — orchestrator; reads `wizardCompleted`; calls `startWizard()` on mount; navigates to Schedule tab (step 1) and Chat tab (step 2) via `router.navigate`
 - `src/wizard/WizardStep1.tsx` — Canvas connect; dark backdrop + calendar spotlight + `Animated` slide-up card + ICS URL modal with validation + `KeyboardAvoidingView` so keyboard doesn't cover input; `POST /ics/connect` → Alert → `advanceWizard()`
 - `src/wizard/WizardStep2.tsx` — chat intro; backdrop + input-bar spotlight + slide-up card; both "Got it" and "Skip" call `advanceWizard()`
-- `src/hooks/useTasks.ts` — `useTasks(filters?)`, `useTask(id)` (cache lookup), `useUpdateTask()`, `useDeleteTask()`
+- `src/hooks/useTasks.ts` — `useTasks(filters?)`, `useTask(id)` (cache lookup), `useUpdateTask()`, `useDeleteTask()`, `useCreateTask()`, `useSubtasks(taskId)`, `useBreakdownTask()`
 - `src/wizard/WizardStep3.tsx` — feature discovery; dimmed overlay + tall card with 3 icon/title/body rows; "Let's go" → `completeWizard()` (writes `wizardCompleted: true` to AsyncStorage)
 
 ---
@@ -146,28 +152,28 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 
 **a) ✅ Overdue display** — resolved via dedicated Overdue filter tab + mark-all bulk action.
 
-**b) Course grouping** — Design spec calls for tasks grouped by course with the course name as a section header and a colour dot. Currently a flat list because `GET /tasks` returns `course_id` only (no course name/colour). Options: confirm whether the backend joins course data on the tasks response, or fetch `GET /courses` (check backend readiness), or group by `course_id` with a truncated label for now.
+**b) Add task create form** — API/hook layer done (`createTask()`, `useCreateTask()`). Still needed: replace the coming-soon modal in `todo/index.tsx` with the real form (fields: `title`, `due_date` YYYY-MM-DD text input, weight type pills: Assignment 1.0 / Lab 1.5 / Midterm 2.5 / Exam 3.0).
 
-**c) `SubtaskRow` component** — `src/components/todo/SubtaskRow.tsx` not yet built; needed for the subtask checklist in `todo/[id].tsx` once the `breakdown_task` side effect is unblocked.
+**c) Course grouping** — Deferred: `GET /tasks` returns `course_id` only; no `GET /courses` endpoint exists. Flat list is acceptable for the user study.
 
-**d) No `GET /tasks/:id` endpoint** — `todo/[id].tsx` reads the task from the React Query cache. Edge case: deep-linking directly to a task detail with no prior list fetch shows a spinner indefinitely. Low priority for now.
+**d) Subtask section + breakdown wiring** — API/hooks/component done (`getSubtasks`, `triggerBreakdown`, `useSubtasks`, `useBreakdownTask`, `SubtaskRow`). Still needed: wire in `todo/[id].tsx` — replace the disabled breakdown button with an active one (loading spinner while pending, shows subtask section on success); also note that `weightLabel` thresholds were fixed in `[id].tsx` and `TaskRow.tsx` (old thresholds 25/15/10/5 were wrong; correct scale is 2.8/2.0/1.3/0.8 for Exam/Midterm/Lab/Assignment).
 
-**e) "Add task" backend route** — `POST /tasks` is not yet in the backend. The "Add task" `+` button in the TODO header currently shows a coming-soon modal explaining that tasks come from Canvas or U-Wick chat. When the backend ships this route, remove the modal and implement the create form (fields: title, due_date, weight/type, course_id).
+**e) No `GET /tasks/:id` endpoint** — `todo/[id].tsx` reads the task from the React Query cache. Edge case: deep-linking directly to a task detail with no prior list fetch shows a spinner indefinitely. Low priority for now.
 
 ### 2. Schedule tab — `schedule/index.tsx` skeleton
 Create `src/api/schedule.ts` + `src/hooks/useSchedule.ts` + `useHeat.ts`; add `WeekCalendar`, `HeatMapBar`, `BlockCard` components; block CRUD bottom sheets.
 
-### 3. Chat tab — `chat/index.tsx` skeleton
-Create `src/hooks/useChatHistory.ts`; add `FlowPill`, `ShortcutBar`; wire `chatStore`; SSE path disabled until Anthropic API key arrives.
+### 3. Chat tab — `chat/index.tsx` full build
+Backend fully live. Create `src/hooks/useChatHistory.ts` + `useChatStream.ts`; add `FlowPill`, `ShortcutBar`; wire `chatStore` and SSE path. All 7 side-effects are handled server-side — apply optimistic updates on `side_effects` SSE event; invalidate React Query keys on `done` event. `DELETE /chat/history` requires `?flow=` param. Remove coming-soon language from wizard Step 2.
 
-### 4. Profile tab — `profile/index.tsx` skeleton
-Wire to `useUser`; enrollment-gated Major Goals link; ICS status + sync; push notification toggle; logout; create `edit`, `courses`, `syllabus-upload`, `major-goals` sub-screens.
+### 4. Profile tab — `profile/index.tsx` full build
+Wire to `useUser`; enrollment-gated Major Goals link; ICS status + sync + disconnect (`DELETE /ics/disconnect`); push notification toggle; logout. Build sub-screens: `edit`, `courses`, `syllabus-upload`, `major-goals`, `major-goals/[id]`. All backend routes (sessions, majors, goals) are live.
 
 ### 5. Session logging
-Wire `useSession` hook to all session events throughout the app.
+Wire remaining session events throughout the app — `src/api/sessions.ts` is built but most event calls aren't wired yet. Key events still missing: `task_completed`, `study_block_added`, `heat_map_toggled`, `task_breakdown_requested`, `ics_synced`, `major_goal_set`, `notif_tapped`.
 
-### 6. Chat SSE
-Unblock and wire `useChatStream` once Anthropic API key received; apply side effect optimistic updates.
+### 6. Push notification deep links
+EAS Build needed for physical device push. Build receive + deep-link handlers in `app/_layout.tsx`: extract `taskId`/`goalId` from notification data, route to `todo/[id]` or `profile/major-goals/[id]`, log `notif_tapped` session event.
 
-### 7. Syllabus confirm
-Unblock once Anthropic API key received.
+### 7. Syllabus — text-paste flow
+**Approach changed from PDF upload to text-paste.** New flow: `POST /syllabus` with `{ course_id, quarter, text }` → synchronous response `{ jobId, tasks }` → review/edit screen → `POST /syllabus/confirm/:jobId`. No file picker, no polling loop. Build under `profile/syllabus-upload.tsx`.

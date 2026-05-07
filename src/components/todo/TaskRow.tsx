@@ -23,19 +23,19 @@ function formatDueDate(dueDate: string | null): { label: string; urgent: boolean
 }
 
 function weightLabel(weight: number): string {
-  if (weight >= 25) return 'Exam';
-  if (weight >= 15) return 'Midterm';
-  if (weight >= 10) return 'Paper';
-  if (weight >= 5) return 'Quiz';
-  if (weight > 0) return 'Assignment';
+  if (weight >= 2.8) return 'Exam';
+  if (weight >= 2.0) return 'Midterm';
+  if (weight >= 1.3) return 'Lab / Report';
+  if (weight >= 0.8) return 'Assignment / Quiz';
+  if (weight > 0)   return 'Reading';
   return 'Task';
 }
 
 function weightColor(weight: number): string {
-  if (weight >= 25) return '#F76A6A';
-  if (weight >= 15) return '#F7A06A';
-  if (weight >= 10) return '#F7D06A';
-  if (weight >= 5) return Colors.primary;
+  if (weight >= 2.8) return '#F76A6A';
+  if (weight >= 2.0) return '#F7A06A';
+  if (weight >= 1.3) return '#F7D06A';
+  if (weight >= 0.8) return Colors.primary;
   return Colors.textMuted;
 }
 

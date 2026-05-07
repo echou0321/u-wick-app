@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getTasks, updateTask, deleteTask } from '../api/tasks';
-import type { Task } from '../types/api';
+import { getTasks, createTask, updateTask, deleteTask, getSubtasks, triggerBreakdown } from '../api/tasks';
+import type { Task, TaskSubtask } from '../types/api';
 
 export interface TaskFilters {
   done?: boolean;
@@ -43,5 +43,30 @@ export function useDeleteTask() {
   return useMutation({
     mutationFn: (id: string) => deleteTask(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+}
+
+export function useCreateTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Parameters<typeof createTask>[0]) =>
+      createTask(body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+}
+
+export function useSubtasks(taskId: string) {
+  return useQuery<TaskSubtask[]>({
+    queryKey: ['subtasks', taskId],
+    queryFn: () => getSubtasks(taskId).then((r) => r.data),
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
+export function useBreakdownTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: string) => triggerBreakdown(taskId).then((r) => r.data),
+    onSuccess: (_, taskId) => qc.invalidateQueries({ queryKey: ['subtasks', taskId] }),
   });
 }

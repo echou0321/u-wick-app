@@ -100,6 +100,15 @@ export interface ChatMessage {
   created_at: string;
 }
 
+export interface TaskSubtask {
+  id: string;
+  task_id: string;
+  title: string;
+  suggested_start: string | null;
+  done: boolean;
+  sort_order: number;
+}
+
 export interface SyllabusMeta {
   id: string;
   user_id: string;

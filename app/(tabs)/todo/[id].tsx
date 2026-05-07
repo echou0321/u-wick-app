@@ -33,11 +33,11 @@ function formatDate(dateStr: string | null): string {
 }
 
 function weightLabel(weight: number): string {
-  if (weight >= 25) return 'Exam';
-  if (weight >= 15) return 'Midterm';
-  if (weight >= 10) return 'Paper';
-  if (weight >= 5) return 'Quiz';
-  if (weight > 0) return 'Assignment';
+  if (weight >= 2.8) return 'Exam';
+  if (weight >= 2.0) return 'Midterm';
+  if (weight >= 1.3) return 'Lab / Report';
+  if (weight >= 0.8) return 'Assignment / Quiz';
+  if (weight > 0)   return 'Reading';
   return 'Unweighted';
 }
 

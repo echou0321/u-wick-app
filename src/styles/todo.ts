@@ -221,6 +221,47 @@ export const todoStyles = StyleSheet.create({
     color: Colors.textMuted,
   },
 
+  // ── Subtask section ───────────────────────────────────────────
+  subtaskSection: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 18,
+    marginBottom: 16,
+    gap: 12,
+  },
+  subtaskSectionTitle: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.xs,
+    color: Colors.textMuted,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+    marginBottom: 4,
+  },
+  subtaskRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: 10,
+  },
+  subtaskTitle: {
+    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+    lineHeight: FontSizes.base * 1.45,
+  },
+  subtaskDone: {
+    color: Colors.textMuted,
+    textDecorationLine: 'line-through' as const,
+  },
+  subtaskHint: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.xs,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+
   // ── Detail screen ─────────────────────────────────────────────
   detailScroll: {
     flex: 1,
