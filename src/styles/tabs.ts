@@ -103,6 +103,42 @@ export const tabScreenStyles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
+  majorCardRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'stretch' as const,
+  },
+  majorColorBar: {
+    width: 6,
+  },
+  majorCardInner: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  checklistRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  checklistIcon: {
+    width: 26,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    marginRight: 10,
+    marginTop: 2,
+  },
+  checklistText: {
+    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+  },
+  checklistTextDone: {
+    color: Colors.textMuted,
+    opacity: 0.7,
+  },
   rowLabel: {
     fontFamily: Fonts.bodyMedium,
     fontSize: FontSizes.base,

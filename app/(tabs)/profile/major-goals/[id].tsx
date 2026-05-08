@@ -7,13 +7,14 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  Switch,
   Text,
   View,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import type { Major } from '@/src/types/api';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '@/constants/colors';
 
 import { tabScreenStyles as styles } from '@/src/styles/tabs';
 
@@ -106,14 +107,20 @@ export default function MajorGoalDetailScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} style={{ paddingRight: 16 }}>
-            <Text style={styles.subtitle}>‹ Back</Text>
+          <Pressable
+            onPress={() => router.back()}
+            style={{ width: 56, justifyContent: 'center' }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Text style={{ ...styles.title, fontSize: 32, lineHeight: 34 }}>‹</Text>
           </Pressable>
-          <View>
-            <Text style={styles.title}>{goal.major_name}</Text>
-            <Text style={styles.subtitle}>{major.department ?? goal.department ?? '—'}</Text>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
+              {goal.major_name}
+            </Text>
           </View>
-          <View style={{ width: 48 }} />
+          <View style={{ width: 56 }} />
         </View>
       </View>
 
@@ -146,15 +153,29 @@ export default function MajorGoalDetailScreen() {
             renderItem={({ item: step }) => {
               const completed = !!goal.checklist_progress?.[step.step_id];
               return (
-                <View style={styles.rowStatic}>
-                  <Text style={styles.rowLabel}>{step.label}</Text>
-                  <Switch
-                    value={completed}
-                    onValueChange={(next) =>
-                      checklistMutation.mutate({ step_id: step.step_id, completed: next })
-                    }
-                  />
-                </View>
+                <Pressable
+                  style={styles.checklistRow}
+                  onPress={() =>
+                    checklistMutation.mutate({ step_id: step.step_id, completed: !completed })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mark step ${step.label} as ${
+                    completed ? 'incomplete' : 'complete'
+                  }`}
+                >
+                  <View style={styles.checklistIcon}>
+                    <Ionicons
+                      name={completed ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={22}
+                      color={completed ? Colors.primary : Colors.textMuted}
+                    />
+                  </View>
+                  <Text
+                    style={[styles.checklistText, completed && styles.checklistTextDone]}
+                  >
+                    {step.label}
+                  </Text>
+                </Pressable>
               );
             }}
           />
@@ -176,6 +197,33 @@ export default function MajorGoalDetailScreen() {
           <Text style={styles.syncBtnText}>
             {achieveMutation.isPending ? 'Updating...' : 'Mark as achieved'}
           </Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.syncBtn, styles.btnDisabled]}
+          onPress={() => {
+            Alert.alert('Drop goal?', 'This will drop your active major goal.', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Drop',
+                style: 'destructive',
+                onPress: () => {
+                  // Reuse achieve mutation logic but with dropped status
+                  dropOrAchieveMajorGoal(goalId, 'dropped')
+                    .then(() => {
+                      qc.invalidateQueries({ queryKey: ['goals', 'major', 'all'] });
+                      qc.invalidateQueries({ queryKey: ['goals', 'major', 'active'] });
+                      router.back();
+                    })
+                    .catch(() => {
+                      Alert.alert('Error', 'Could not drop major goal. Try again.');
+                    });
+                },
+              },
+            ]);
+          }}
+        >
+          <Text style={styles.syncBtnText}>Drop goal</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>

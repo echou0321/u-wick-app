@@ -18,12 +18,29 @@ import { useMajorGoals } from '@/src/hooks/useMajorGoals';
 import { useMajors } from '@/src/hooks/useMajors';
 import { createMajorGoal, dropOrAchieveMajorGoal, type MajorGoalRow } from '@/src/api/goals';
 import { logEvent } from '@/src/api/sessions';
+import { Colors } from '@/constants/colors';
 
 function fmtDate(value: string | null) {
   if (!value) return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleDateString();
+}
+
+const MAJOR_BAR_COLORS = [
+  Colors.accentTeal,
+  Colors.accentOrange,
+  Colors.accentYellow,
+  Colors.primaryLight,
+  Colors.primary,
+] as const;
+
+function colorForString(input: string) {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = (hash * 31 + input.charCodeAt(i)) >>> 0;
+  }
+  return MAJOR_BAR_COLORS[hash % MAJOR_BAR_COLORS.length];
 }
 
 export default function MajorGoalsScreen() {
@@ -109,11 +126,18 @@ export default function MajorGoalsScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} style={{ paddingRight: 16 }}>
-            <Text style={styles.subtitle}>‹ Back</Text>
+          <Pressable
+            onPress={() => router.back()}
+            style={{ width: 56, justifyContent: 'center' }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Text style={{ ...styles.title, fontSize: 32, lineHeight: 34 }}>‹</Text>
           </Pressable>
-          <Text style={styles.title}>Major Goals</Text>
-          <View style={{ width: 48 }} />
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={styles.title}>Major Goals</Text>
+          </View>
+          <View style={{ width: 56 }} />
         </View>
       </View>
 
@@ -121,54 +145,37 @@ export default function MajorGoalsScreen() {
         {goalsList.length === 0 ? (
           <View style={styles.listCard}>
             <Text style={styles.placeholder}>No active major goals yet.</Text>
-            <Pressable
-              style={styles.rowBtn}
-              onPress={() => setPickerOpen(true)}
-              disabled={majorsLoading || !!majorsError}
-            >
-              <Text style={styles.rowLabel}>Add major goal</Text>
-              <Text style={styles.rowValue}>›</Text>
-            </Pressable>
           </View>
         ) : (
           goalsList.map((g) => (
-            <View key={g.id} style={styles.listCard}>
-              <View style={styles.rowStatic}>
-                <Text style={styles.rowLabel}>{g.major_name}</Text>
-                <Text style={styles.rowValue}>{fmtDate(g.application_deadline)}</Text>
+            <Pressable
+              key={g.id}
+              style={styles.listCard}
+              onPress={() => router.push(`/(tabs)/profile/major-goals/${g.id}`)}
+            >
+              <View style={styles.majorCardRow}>
+                <View style={[styles.majorColorBar, { backgroundColor: colorForString(g.major_req_id) }]} />
+                <View style={styles.majorCardInner}>
+                  <View style={styles.rowStatic}>
+                    <Text style={styles.rowLabel}>{g.major_name}</Text>
+                    <Text style={styles.rowValue}>›</Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.rowStatic}>
-                <Text style={styles.rowLabel}>Department</Text>
-                <Text style={styles.rowValue}>{g.department ?? '—'}</Text>
-              </View>
-
-              <Pressable
-                style={styles.rowBtn}
-                onPress={() => router.push(`/(tabs)/profile/major-goals/${g.id}`)}
-              >
-                <Text style={styles.rowLabel}>View checklist</Text>
-                <Text style={styles.rowValue}>›</Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.rowBtn}
-                onPress={() => {
-                  Alert.alert('Drop goal?', 'This will drop your active major goal.', [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Drop',
-                      style: 'destructive',
-                      onPress: () => dropMutation.mutate({ goalId: g.id, status: 'dropped' }),
-                    },
-                  ]);
-                }}
-              >
-                <Text style={styles.rowLabel}>Drop</Text>
-                <Text style={styles.rowValue}>—</Text>
-              </Pressable>
-            </View>
+            </Pressable>
           ))
         )}
+
+        <View style={styles.listCard}>
+          <Pressable
+            style={styles.rowBtn}
+            onPress={() => setPickerOpen(true)}
+            disabled={majorsLoading || !!majorsError}
+          >
+            <Text style={styles.rowLabel}>Add major goal</Text>
+            <Text style={styles.rowValue}>›</Text>
+          </Pressable>
+        </View>
       </ScrollView>
 
       <Modal visible={pickerOpen} animationType="slide" onRequestClose={() => setPickerOpen(false)}>
