@@ -4,15 +4,19 @@ import { Fonts, FontSizes } from '@/constants/typography';
 
 export const todoStyles = StyleSheet.create({
   // ── Filter bar ──────────────────────────────────────────────
-  filterBar: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 8,
+  filterBarOuter: {
+    height: 52,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    gap: 8,
+  },
   filterPill: {
+    alignSelf: 'center',
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
@@ -205,22 +209,6 @@ export const todoStyles = StyleSheet.create({
     fontFamily: Fonts.bodyMedium,
     fontSize: FontSizes.sm,
     color: Colors.primary,
-  },
-
-  // ── Show completed toggle ─────────────────────────────────────
-  completedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  completedRowText: {
-    fontFamily: Fonts.bodyMedium,
-    fontSize: FontSizes.sm,
-    color: Colors.textMuted,
   },
 
   // ── Subtask section ───────────────────────────────────────────
