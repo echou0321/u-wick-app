@@ -40,23 +40,30 @@ const WEIGHT_OPTIONS = [
 function isThisWeek(dueDate: string | null): boolean {
   if (!dueDate) return false;
   const due = new Date(dueDate);
-  const weekFromNow = new Date();
-  weekFromNow.setDate(weekFromNow.getDate() + 7);
-  return due <= weekFromNow;
+  due.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const weekFromNow = new Date(today);
+  weekFromNow.setDate(today.getDate() + 7);
+  return due >= today && due <= weekFromNow;
 }
 
-function isOverdue(task: Task): boolean {
-  if (!task.due_date || task.done) return false;
+function isPastDue(task: Task): boolean {
+  if (!task.due_date) return false;
   const due = new Date(task.due_date);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return due < today;
 }
 
-function applyFilter(tasks: Task[], filter: TaskFilter): Task[] {
+function isOverdue(task: Task): boolean {
+  return !task.done && isPastDue(task);
+}
+
+function applyFilter(tasks: Task[], filter: TaskFilter, forDone = false): Task[] {
   if (filter === 'starred') return tasks.filter((t) => t.highlighted);
   if (filter === 'week') return tasks.filter((t) => isThisWeek(t.due_date));
-  if (filter === 'overdue') return tasks.filter(isOverdue);
+  if (filter === 'overdue') return tasks.filter(forDone ? isPastDue : isOverdue);
   return tasks;
 }
 
@@ -101,9 +108,9 @@ export default function TodoScreen() {
 
   const filtered = applyFilter(activeTasks ?? [], filter);
   const sorted = sortTasks(filtered, sortOrder);
-  const listData: Task[] = showCompleted
-    ? [...sorted, ...(doneTasks ?? [])]
-    : sorted;
+  const filteredDone = applyFilter(doneTasks ?? [], filter, true);
+  const sortedDone = sortTasks(filteredDone, sortOrder);
+  const listData: Task[] = showCompleted ? [...sorted, ...sortedDone] : sorted;
 
   const overdueList = applyFilter(activeTasks ?? [], 'overdue');
 

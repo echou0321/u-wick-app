@@ -6,7 +6,7 @@ import { Colors } from '@/constants/colors';
 import { todoStyles as s } from '@/src/styles/todo';
 import type { Task } from '@/src/types/api';
 
-function formatDueDate(dueDate: string | null): { label: string; urgent: boolean } {
+function formatDueDate(dueDate: string | null, done: boolean): { label: string; urgent: boolean } {
   if (!dueDate) return { label: 'No due date', urgent: false };
   const due = new Date(dueDate);
   const today = new Date();
@@ -14,7 +14,13 @@ function formatDueDate(dueDate: string | null): { label: string; urgent: boolean
   const dueDay = new Date(due);
   dueDay.setHours(0, 0, 0, 0);
   const diffDays = Math.round((dueDay.getTime() - today.getTime()) / 86400000);
-  if (diffDays < 0) return { label: 'Overdue', urgent: true };
+  if (diffDays < 0) {
+    if (done) {
+      const label = due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return { label: `Due ${label}`, urgent: false };
+    }
+    return { label: 'Overdue', urgent: true };
+  }
   if (diffDays === 0) return { label: 'Due today', urgent: true };
   if (diffDays === 1) return { label: 'Due tomorrow', urgent: true };
   if (diffDays <= 7) return { label: `Due in ${diffDays} days`, urgent: false };
@@ -49,7 +55,7 @@ interface Props {
 
 export default function TaskRow({ task, onPress, onToggleStar, onToggleDone, onDelete }: Props) {
   const swipeRef = useRef<Swipeable>(null);
-  const { label: dueDateLabel, urgent } = formatDueDate(task.due_date);
+  const { label: dueDateLabel, urgent } = formatDueDate(task.due_date, task.done);
   const wColor = weightColor(task.weight);
 
   function renderRightActions(
