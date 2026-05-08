@@ -76,6 +76,92 @@ export const inputStyles = StyleSheet.create({
   },
 });
 
+export const flowPillStyles = StyleSheet.create({
+  pill: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    gap: 5,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  label: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+  },
+});
+
+export const shortcutBarStyles = StyleSheet.create({
+  container: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    height: 52,
+  },
+  scroll: {
+    paddingHorizontal: 12,
+    gap: 8,
+    alignItems: 'center' as const,
+  },
+  pill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    alignSelf: 'center' as const,
+  },
+  pillActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.bubbleUser,
+  },
+  pillText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+  },
+  pillTextActive: {
+    color: Colors.primaryLight,
+  },
+});
+
+export const chatScreenStyles = StyleSheet.create({
+  messageList: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+    flexGrow: 1,
+  },
+  errorText: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.sm,
+    color: Colors.accentOrange,
+    textAlign: 'center' as const,
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  offlineBanner: {
+    backgroundColor: Colors.accentYellow,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  offlineText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.bg,
+    textAlign: 'center' as const,
+  },
+});
+
 export const typingStyles = StyleSheet.create({
   bubble: {
     backgroundColor: Colors.bubbleBot,

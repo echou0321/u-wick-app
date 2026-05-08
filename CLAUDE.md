@@ -111,11 +111,12 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `app/(onboarding)/profile.tsx` — current_quarter + enrollment_status segmented control + optional major; `PATCH /users/me`; navigates to `/notifications`
 - `app/(onboarding)/notifications.tsx` — 3 feature rows; "Enable Notifications" requests OS permission + Expo push token + `PATCH /users/me/push-token`; "Skip for now" path; both paths call `POST /users/me/onboarding/complete` + fire-and-forget `POST /sessions/start` → `/(tabs)/chat`
 - `app/(tabs)/_layout.tsx` — 4 tabs: Chat / TODO / Schedule / Profile; Ionicons; wraps Tabs in View + mounts `<CoachMarkWizard />` as absolute overlay
-- `app/(tabs)/chat/index.tsx` — skeleton
+- `app/(tabs)/chat/index.tsx` — **in progress (chat_branch)**: per-flow message history (loads from React Query, lives in local state during session), SSE streaming via XHR + `onprogress` (token → streaming bubble → finalized message), clear-conversation Alert (`DELETE /chat/history?flow=`), offline banner, `FlowPill` in header, `ShortcutBar` shortcuts with enrollment-gated "Major advising"; **known gaps / needs testing**: markdown rendering in bubbles, scroll-to-bottom edge cases, session start before first message, wizard Step 2 "coming soon" copy not yet removed
 - `app/(tabs)/todo/index.tsx` — **built**: task list with All/This Week/Overdue/Starred filter bar, pull-to-refresh (invalidates all `['tasks']` keys), bidirectional done toggle (checkbox on each row + undo toast), sort by due date or weight (header icon), mark-all-overdue-done bulk action, swipe-to-delete (hard delete for manual/ai/syllabus; soft delete for ICS), show-completed toggle (fixed row above list, scoped to active filter), ICS import modal (cloud icon in header + CTA in empty state), add-task form (title + optional YYYY-MM-DD due date + weight type pills: Assignment/Lab/Midterm/Exam), `__DEV__`-only sign-out icon in header; scroll resets to top on filter or completed-toggle change; `isThisWeek` is today→+7 days only (past-due tasks excluded)
 - `app/(tabs)/todo/[id].tsx` — **built**: task detail; done toggle, due date, type label, source badge, active "Break this down" button (loading spinner while pending), subtask section (renders `SubtaskRow` list on breakdown success), delete/remove action
 - `app/(tabs)/schedule/index.tsx` — skeleton
 - `app/(tabs)/profile/index.tsx` — skeleton
+- `src/api/chat.ts` — `getChatHistory(flow)`, `deleteChatHistory(flow)`
 - `src/api/auth.ts` — `login()`, `register()`
 - `src/api/users.ts` — `getMe()`, `updateMe()`, `completeOnboarding()`, `updatePushToken()`
 - `src/api/sessions.ts` — `startSession()`, `logEvent()`, `endSession()`
@@ -127,14 +128,16 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `src/stores/uiStore.ts` — heatMap / offline / wizard state; `heatMapVisible` + `wizardCompleted` persisted to AsyncStorage; `startWizard()` sets wizardStep to 1
 - `src/styles/forms.ts` — `formStyles`: card/form/input/button pattern (auth + onboarding screens)
 - `src/styles/components.ts` — `cardStyles`, `badgeStyles`: generic UI components
-- `src/styles/chat.ts` — `bubbleStyles`, `inputStyles`, `typingStyles`: chat components
+- `src/styles/chat.ts` — `bubbleStyles`, `inputStyles`, `typingStyles`, `flowPillStyles`, `shortcutBarStyles`, `chatScreenStyles`: chat components
 - `src/styles/tabs.ts` — `tabScreenStyles`, `tabBarStyles`: tab screens + tab bar
 - `src/styles/wizard.ts` — `wizardStyles`: overlay, spotlight, slide-up card, feature rows
 - `src/styles/todo.ts` — `todoStyles`: filter bar, task row (incl. `checkBox`), swipe action, empty state, `markAllBtn`, `sortRow`, `undoToast`, detail screen
 - `src/components/ui/Card.tsx`, `Badge.tsx` — generic, pull styles from `components.ts`
 - `src/components/chat/ChatBubble.tsx` — stripped of prototype fields; uses `ChatMessage` from `src/types/api`; markdown rendering pending
-- `src/components/chat/ChatInput.tsx` — `onSend` + `disabled` prop; pull styles from `chat.ts`
+- `src/components/chat/ChatInput.tsx` — `onSend` + `disabled` + `prefill` + `inputRef` props; `prefill` sets value via `useEffect` only when it changes to a new non-empty string; pull styles from `chat.ts`
 - `src/components/chat/TypingIndicator.tsx` — staggered dot animation; pull styles from `chat.ts`
+- `src/components/chat/FlowPill.tsx` — colored dot + human-readable flow label badge; label/color maps for all 5 `FlowMode` values
+- `src/components/chat/ShortcutBar.tsx` — horizontal scrollable shortcuts; hides "Major advising" when `enrollmentStatus === 'in-major'`; active highlight on named-flow pills (not `free`)
 - `src/components/todo/TaskFilterBar.tsx` — All / This Week / Overdue / Starred pill filter; `TaskFilter` type exported
 - `src/components/todo/TaskRow.tsx` — swipeable row; circular done checkbox (bidirectional), title, due date (relative + urgent colour — "Overdue" label suppressed for done tasks, shows plain date instead), weight badge, star toggle; swipe-left = delete action; `weightLabel`/`weightColor` thresholds corrected to real weight scale (2.8/2.0/1.3/0.8)
 - `src/components/todo/SubtaskRow.tsx` — read-only subtask row; checkmark/ellipse icon reflects `done` state; shows `suggested_start` hint if present
@@ -143,6 +146,9 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `src/wizard/WizardStep1.tsx` — Canvas connect; dark backdrop + calendar spotlight + `Animated` slide-up card + ICS URL modal with validation + `KeyboardAvoidingView` so keyboard doesn't cover input; `POST /ics/connect` → Alert → `advanceWizard()`
 - `src/wizard/WizardStep2.tsx` — chat intro; backdrop + input-bar spotlight + slide-up card; both "Got it" and "Skip" call `advanceWizard()`
 - `src/hooks/useTasks.ts` — `useTasks(filters?)`, `useTask(id)` (cache lookup), `useUpdateTask()`, `useDeleteTask()`, `useCreateTask()`, `useSubtasks(taskId)`, `useBreakdownTask()`
+- `src/hooks/useUser.ts` — `useUser()` React Query hook; queryKey `['user']`, staleTime 5 min
+- `src/hooks/useChatHistory.ts` — `useChatHistory(flow)` (staleTime 0, always fresh on mount); `useClearChatHistory()` mutation (DELETE + invalidate)
+- `src/hooks/useChatStream.ts` — SSE via XHR + `onprogress`; handles `token` / `side_effects` / `done` events; invalidates React Query keys per side-effect type; fire-and-forget `logEvent('chat_turn')`; graceful fallback if stream closes without `done`
 - `src/wizard/WizardStep3.tsx` — feature discovery; dimmed overlay + tall card with 3 icon/title/body rows; "Let's go" → `completeWizard()` (writes `wizardCompleted: true` to AsyncStorage)
 
 ---
@@ -156,8 +162,15 @@ All gaps resolved. Known deferred items: course grouping (no `GET /courses` endp
 ### 2. Schedule tab — `schedule/index.tsx` skeleton
 Create `src/api/schedule.ts` + `src/hooks/useSchedule.ts` + `useHeat.ts`; add `WeekCalendar`, `HeatMapBar`, `BlockCard` components; block CRUD bottom sheets.
 
-### 3. Chat tab — `chat/index.tsx` full build
-Backend fully live. Create `src/hooks/useChatHistory.ts` + `useChatStream.ts`; add `FlowPill`, `ShortcutBar`; wire `chatStore` and SSE path. All 7 side-effects are handled server-side — apply optimistic updates on `side_effects` SSE event; invalidate React Query keys on `done` event. `DELETE /chat/history` requires `?flow=` param. Remove coming-soon language from wizard Step 2.
+### 3. 🚧 Chat tab — in progress on `chat_branch`
+Core wiring is done (SSE streaming, per-flow history, FlowPill, ShortcutBar, clear conversation). **Many things still to test and fix before merging:**
+- Markdown rendering in assistant bubbles (currently plain text)
+- Session `POST /sessions/start` before the first message if no session is active
+- Scroll-to-bottom edge cases (especially on initial history load)
+- Remove "coming soon" copy from WizardStep2 now that chat is live
+- End-to-end test of all 7 side-effect types (add_task, complete_task, add_study_blocks, breakdown_task, update_checklist, schedule_alert, set_notif_active)
+- Offline state: verify disabled input + cached history renders correctly
+- Clear conversation: confirm `?flow=` param is always sent
 
 ### 4. Profile tab — `profile/index.tsx` full build
 Wire to `useUser`; enrollment-gated Major Goals link; ICS status + sync + disconnect (`DELETE /ics/disconnect`); push notification toggle; logout. Build sub-screens: `edit`, `courses`, `syllabus-upload`, `major-goals`, `major-goals/[id]`. All backend routes (sessions, majors, goals) are live.
