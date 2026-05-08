@@ -23,11 +23,16 @@ import { useMajorGoals } from '@/src/hooks/useMajorGoals';
 
 export default function MajorGoalDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const goalId = Array.isArray(id) ? id[0] : id;
 
   const qc = useQueryClient();
-  const goalId = id;
 
-  const { data: goals, isLoading: goalsLoading, isError: goalsError } = useMajorGoals('all');
+  const {
+    data: goals,
+    isLoading: goalsLoading,
+    isFetching: goalsFetching,
+    isError: goalsError,
+  } = useMajorGoals('all');
   const goal = useMemo(() => (goals ?? []).find((g) => g.id === goalId), [goals, goalId]);
 
   const majorReqId = goal?.major_req_id ?? null;
@@ -41,15 +46,21 @@ export default function MajorGoalDetailScreen() {
   const checklistMutation = useMutation({
     mutationFn: ({ step_id, completed }: { step_id: string; completed: boolean }) =>
       updateMajorChecklist(goalId, step_id, completed),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals', 'major'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['goals', 'major', 'all'] });
+      qc.invalidateQueries({ queryKey: ['goals', 'major', 'active'] });
+    },
   });
 
   const achieveMutation = useMutation({
     mutationFn: () => dropOrAchieveMajorGoal(goalId, 'achieved'),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals', 'major'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['goals', 'major', 'all'] });
+      qc.invalidateQueries({ queryKey: ['goals', 'major', 'active'] });
+    },
   });
 
-  if (goalsLoading || majorQuery.isLoading) {
+  if (!goalId || goalsLoading || goalsFetching || (goal && majorQuery.isLoading)) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
@@ -59,11 +70,31 @@ export default function MajorGoalDetailScreen() {
     );
   }
 
-  if (goalsError || !goal || majorQuery.error) {
+  if (goalsError) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
-          <Text style={styles.placeholder}>Could not load major goal.</Text>
+          <Text style={styles.placeholder}>Could not load major goals.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!goal) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.centered}>
+          <Text style={styles.placeholder}>Could not find that major goal.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (majorQuery.error || !majorQuery.data) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.centered}>
+          <Text style={styles.placeholder}>Could not load major requirement details.</Text>
         </View>
       </SafeAreaView>
     );

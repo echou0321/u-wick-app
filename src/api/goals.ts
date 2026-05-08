@@ -18,7 +18,8 @@ export interface MajorGoalRow {
 
 export function getMajorGoals(status: 'active' | 'dropped' | 'achieved' | 'all' = 'active') {
   return client.get<MajorGoalRow[]>(`/goals/major`, {
-    params: status && status !== 'all' ? { status } : undefined,
+    // Always pass status explicitly so "all" doesn't fall back to backend default ("active").
+    params: { status },
   }).then((res) => res.data);
 }
 

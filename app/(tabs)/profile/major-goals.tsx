@@ -47,6 +47,7 @@ export default function MajorGoalsScreen() {
       createMajorGoal(majorReqId),
     onSuccess: (created: any) => {
       qc.invalidateQueries({ queryKey: ['goals', 'major', 'active'] });
+      qc.invalidateQueries({ queryKey: ['goals', 'major', 'all'] });
       setPickerOpen(false);
       logEvent('major_goal_set', { goal_id: created?.id }).catch(() => {});
       const createdId = created?.id;
@@ -76,7 +77,10 @@ export default function MajorGoalsScreen() {
   const dropMutation = useMutation({
     mutationFn: ({ goalId, status }: { goalId: string; status: 'dropped' | 'achieved' }) =>
       dropOrAchieveMajorGoal(goalId, status),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals', 'major', 'active'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['goals', 'major', 'active'] });
+      qc.invalidateQueries({ queryKey: ['goals', 'major', 'all'] });
+    },
   });
 
   const goalsList: MajorGoalRow[] = useMemo(() => goals ?? [], [goals]);
