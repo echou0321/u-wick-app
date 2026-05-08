@@ -93,7 +93,7 @@ export default function TodoScreen() {
   const qc = useQueryClient();
   const clearAuth = useAuthStore((s) => s.clearAuth);
 
-  const { data: activeTasks, isLoading, refetch, isRefetching } = useTasks({ done: false });
+  const { data: activeTasks, isLoading, isRefetching } = useTasks({ done: false });
   const { data: doneTasks } = useTasks({ done: true });
   const { mutate: updateTask, mutateAsync: updateTaskAsync } = useUpdateTask();
   const { mutate: deleteTask } = useDeleteTask();
@@ -362,7 +362,7 @@ export default function TodoScreen() {
               />
             </View>
           }
-          onRefresh={refetch}
+          onRefresh={() => qc.invalidateQueries({ queryKey: ['tasks'] })}
           refreshing={isRefetching}
           contentContainerStyle={listData.length === 0 ? { flex: 1 } : undefined}
         />

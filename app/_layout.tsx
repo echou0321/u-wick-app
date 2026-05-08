@@ -14,12 +14,20 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Colors } from '@/constants/colors';
+import { useAuthStore } from '@/src/stores/authStore';
 
 const queryClient = new QueryClient();
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const token = useAuthStore((s) => s.token);
+
+  // Clear all cached server data when the user logs out or switches accounts
+  useEffect(() => {
+    if (!token) queryClient.clear();
+  }, [token]);
+
   const [fontsLoaded, fontError] = useFonts({
     DMSans_400Regular,
     DMSans_500Medium,
