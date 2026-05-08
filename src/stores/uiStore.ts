@@ -12,6 +12,7 @@ interface UIStore {
   startWizard: () => void;
   advanceWizard: () => void;
   completeWizard: () => void;
+  resetWizard: () => void;
 }
 
 export const useUIStore = create<UIStore>()(
@@ -29,6 +30,7 @@ export const useUIStore = create<UIStore>()(
           wizardStep: Math.min(s.wizardStep + 1, 3) as 0 | 1 | 2 | 3,
         })),
       completeWizard: () => set({ wizardCompleted: true, wizardStep: 0 }),
+      resetWizard: () => set({ wizardCompleted: false, wizardStep: 0 }),
     }),
     {
       name: 'ui-store',

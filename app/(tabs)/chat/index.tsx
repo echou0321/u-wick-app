@@ -8,12 +8,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { tabScreenStyles } from '@/src/styles/tabs';
-import { chatScreenStyles as styles } from '@/src/styles/chat';
+import { chatScreenStyles as styles, flowTabStyles } from '@/src/styles/chat';
 import { useChatHistory, useClearChatHistory } from '@/src/hooks/useChatHistory';
 import { useChatStream } from '@/src/hooks/useChatStream';
 import { useUser } from '@/src/hooks/useUser';
@@ -22,7 +23,6 @@ import { useUIStore } from '@/src/stores/uiStore';
 import { ChatBubble } from '@/src/components/chat/ChatBubble';
 import { ChatInput } from '@/src/components/chat/ChatInput';
 import { TypingIndicator } from '@/src/components/chat/TypingIndicator';
-import { FlowPill } from '@/src/components/chat/FlowPill';
 import { ShortcutBar } from '@/src/components/chat/ShortcutBar';
 import type { ChatMessage, FlowMode } from '@/src/types/api';
 
@@ -30,6 +30,19 @@ type DisplayItem =
   | { kind: 'message'; msg: ChatMessage; key: string }
   | { kind: 'streaming'; content: string; key: string }
   | { kind: 'typing'; key: string };
+
+interface FlowTab {
+  flow: FlowMode;
+  label: string;
+  color: string;
+}
+
+const ALL_TABS: FlowTab[] = [
+  { flow: 'free', label: 'Chat', color: Colors.primary },
+  { flow: 'planning', label: 'Planning', color: Colors.accentTeal },
+  { flow: 'quarter_planning', label: 'Quarter plan', color: Colors.accentOrange },
+  { flow: 'advising', label: 'Advising', color: Colors.accentYellow },
+];
 
 export default function ChatScreen() {
   const { activeFlow, setFlow } = useChatStore();
@@ -44,6 +57,10 @@ export default function ChatScreen() {
   const [initialized, setInitialized] = useState(false);
   const [prefill, setPrefill] = useState('');
   const listRef = useRef<FlatList>(null);
+
+  const visibleTabs = ALL_TABS.filter(
+    (t) => !(t.flow === 'advising' && user?.enrollment_status === 'in-major'),
+  );
 
   // Reset when flow changes
   useEffect(() => {
@@ -107,11 +124,6 @@ export default function ChatScreen() {
     ]);
   }
 
-  function handleShortcutSelect(flow: FlowMode, p: string) {
-    setFlow(flow);
-    setPrefill(p);
-  }
-
   const displayItems: DisplayItem[] = [
     ...localMessages.map((msg, i) => ({
       kind: 'message' as const,
@@ -127,6 +139,8 @@ export default function ChatScreen() {
       : []),
   ];
 
+  const activeTab = visibleTabs.find((t) => t.flow === activeFlow) ?? visibleTabs[0];
+
   return (
     <SafeAreaView style={tabScreenStyles.safe}>
       {isOffline && (
@@ -134,10 +148,46 @@ export default function ChatScreen() {
           <Text style={styles.offlineText}>You're offline — chat is unavailable</Text>
         </View>
       )}
-      <View style={[tabScreenStyles.header, tabScreenStyles.headerRow]}>
-        <FlowPill flow={activeFlow} />
-        <TouchableOpacity onPress={handleClear} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="refresh-outline" size={22} color={Colors.textSecondary} />
+
+      {/* Flow tab strip */}
+      <View style={flowTabStyles.row}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={flowTabStyles.scroll}
+          contentContainerStyle={flowTabStyles.scrollContent}
+        >
+          {visibleTabs.map((tab) => {
+            const isActive = activeFlow === tab.flow;
+            return (
+              <TouchableOpacity
+                key={tab.flow}
+                style={[
+                  flowTabStyles.tab,
+                  isActive && { borderBottomColor: tab.color },
+                ]}
+                onPress={() => setFlow(tab.flow)}
+                activeOpacity={0.7}
+              >
+                <View style={[flowTabStyles.dot, { backgroundColor: tab.color }]} />
+                <Text
+                  style={[
+                    flowTabStyles.label,
+                    isActive && flowTabStyles.labelActive,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+        <TouchableOpacity
+          style={flowTabStyles.clearBtn}
+          onPress={handleClear}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="refresh-outline" size={20} color={Colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
@@ -147,7 +197,7 @@ export default function ChatScreen() {
       >
         {isLoading && !initialized ? (
           <View style={tabScreenStyles.centered}>
-            <ActivityIndicator color={Colors.primary} />
+            <ActivityIndicator color={activeTab.color} />
           </View>
         ) : (
           <FlatList
@@ -178,11 +228,7 @@ export default function ChatScreen() {
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <ShortcutBar
-          activeFlow={activeFlow}
-          enrollmentStatus={user?.enrollment_status}
-          onShortcutSelect={handleShortcutSelect}
-        />
+        <ShortcutBar activeFlow={activeFlow} onPrefill={setPrefill} />
         <ChatInput
           onSend={handleSend}
           disabled={isStreaming || isOffline}

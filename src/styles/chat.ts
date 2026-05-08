@@ -194,6 +194,51 @@ export const shortcutBarStyles = StyleSheet.create({
   },
 });
 
+export const flowTabStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row' as const,
+    alignItems: 'stretch' as const,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.bg,
+  },
+  scroll: {
+    flexShrink: 1,
+  },
+  scrollContent: {
+    paddingLeft: 8,
+  },
+  tab: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  label: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.textMuted,
+  },
+  labelActive: {
+    color: Colors.textPrimary,
+  },
+  clearBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    justifyContent: 'center' as const,
+    borderLeftWidth: 1,
+    borderLeftColor: Colors.border,
+  },
+});
+
 export const chatScreenStyles = StyleSheet.create({
   messageList: {
     paddingHorizontal: 16,

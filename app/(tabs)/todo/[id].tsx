@@ -33,13 +33,11 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
-function weightLabel(weight: number): string {
-  if (weight >= 2.8) return 'Exam';
-  if (weight >= 2.0) return 'Midterm';
-  if (weight >= 1.3) return 'Lab / Report';
-  if (weight >= 0.8) return 'Assignment / Quiz';
-  if (weight > 0)   return 'Reading';
-  return 'Unweighted';
+function priorityLabel(weight: number): string {
+  if (weight >= 2.0) return 'High';
+  if (weight >= 1.0) return 'Medium';
+  if (weight > 0)   return 'Low';
+  return 'None';
 }
 
 export default function TaskDetailScreen() {
@@ -130,9 +128,16 @@ export default function TaskDetailScreen() {
           </View>
 
           <View style={s.detailRow}>
-            <Text style={s.detailLabel}>Type</Text>
-            <Text style={s.detailValue}>{weightLabel(task.weight)}</Text>
+            <Text style={s.detailLabel}>Priority</Text>
+            <Text style={s.detailValue}>{priorityLabel(task.weight)}</Text>
           </View>
+
+          {task.tag ? (
+            <View style={s.detailRow}>
+              <Text style={s.detailLabel}>Tag</Text>
+              <Text style={s.detailValue}>{task.tag}</Text>
+            </View>
+          ) : null}
 
           <View style={s.detailRow}>
             <Text style={s.detailLabel}>Source</Text>
