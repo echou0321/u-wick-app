@@ -183,3 +183,6 @@ EAS Build needed for physical device push. Build receive + deep-link handlers in
 
 ### 7. Syllabus — text-paste flow
 **Approach changed from PDF upload to text-paste.** New flow: `POST /syllabus` with `{ course_id, quarter, text }` → synchronous response `{ jobId, tasks }` → review/edit screen → `POST /syllabus/confirm/:jobId`. No file picker, no polling loop. Build under `profile/syllabus-upload.tsx`.
+
+### 8. ⏳ Dashboard / chat empty state — deferred
+**Do not start until the chat tab is stable and merged.** When the chat FlatList is empty (no history for the active flow), render a compact dashboard summary instead of a blank screen using `GET /users/me/dashboard` → `{ tasks_due_soon, schedule_today, nudges, heat_this_week }`. Once the user sends a message the cards scroll away and never reappear. No new tab needed — this is an empty-state enhancement to the existing Chat tab. Requires a `useDashboard` hook + a lightweight summary card component.
