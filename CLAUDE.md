@@ -24,6 +24,7 @@ Say "Frontend Design Doc loaded." at the start of every session after reading it
 - Chat uses SSE (`fetch` ReadableStream). No WebSocket.
 - EAS Build required for push notifications — Expo Go does not support push in SDK 54+.
 - Base URL from `process.env.EXPO_PUBLIC_API_URL` in `.env.local` (never committed).
+- `@react-native/babel-plugin-codegen` is patched via `patch-package` (see `patches/` dir) — RN 0.81 ships `@react-native/codegen` without the flow parser; the plugin is replaced with a no-op since the project has no `codegenNativeComponent` usage. `postinstall` in `package.json` re-applies the patch after every `npm install`.
 
 ---
 
@@ -101,7 +102,7 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 ### Built
 - `app/splash.tsx` — animated splash with glow orbs, spring entrance, staggered loading dots; real auth gate (SecureStore hydrate → JWT expiry check → `GET /users/me` → navigate); min 1500ms display, navigation fires when both gate + timer resolve
 - `app/index.tsx` — redirects to `/splash`
-- `app/_layout.tsx` — `GestureHandlerRootView` (outermost) + `QueryClientProvider`; Stack registers `(auth)`, `(onboarding)`, `(tabs)`; auth gate lives in `splash.tsx`
+- `app/_layout.tsx` — `GestureHandlerRootView` (outermost) + `QueryClientProvider`; Stack registers `(auth)`, `(onboarding)`, `(tabs)`; auth gate lives in `splash.tsx`; subscribes to `authStore.token` and calls `queryClient.clear()` when it goes null (prevents stale cache bleed across account switches)
 - `babel.config.js` — `babel-preset-expo` + `react-native-reanimated/plugin` (required for reanimated v4 / bottom sheets)
 - `app/(auth)/_layout.tsx` — auth group Stack with fade animation
 - `app/(auth)/login.tsx` — email + password form; inline field validation; 401 error message; navigates to `/(tabs)/chat` or `/(onboarding)/profile` based on `onboarding_complete`
@@ -111,7 +112,7 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `app/(onboarding)/notifications.tsx` — 3 feature rows; "Enable Notifications" requests OS permission + Expo push token + `PATCH /users/me/push-token`; "Skip for now" path; both paths call `POST /users/me/onboarding/complete` + fire-and-forget `POST /sessions/start` → `/(tabs)/chat`
 - `app/(tabs)/_layout.tsx` — 4 tabs: Chat / TODO / Schedule / Profile; Ionicons; wraps Tabs in View + mounts `<CoachMarkWizard />` as absolute overlay
 - `app/(tabs)/chat/index.tsx` — skeleton
-- `app/(tabs)/todo/index.tsx` — **built**: task list with All/This Week/Overdue/Starred filter bar, pull-to-refresh, bidirectional done toggle (checkbox on each row + undo toast), sort by due date or weight (header icon), mark-all-overdue-done bulk action, swipe-to-delete (hard delete for manual/ai/syllabus; soft delete for ICS), show-completed toggle, ICS import modal (cloud icon in header + CTA in empty state), add-task form (title + optional YYYY-MM-DD due date + weight type pills: Assignment/Lab/Midterm/Exam), `__DEV__`-only sign-out icon in header
+- `app/(tabs)/todo/index.tsx` — **built**: task list with All/This Week/Overdue/Starred filter bar, pull-to-refresh (invalidates all `['tasks']` keys), bidirectional done toggle (checkbox on each row + undo toast), sort by due date or weight (header icon), mark-all-overdue-done bulk action, swipe-to-delete (hard delete for manual/ai/syllabus; soft delete for ICS), show-completed toggle (fixed row above list, scoped to active filter), ICS import modal (cloud icon in header + CTA in empty state), add-task form (title + optional YYYY-MM-DD due date + weight type pills: Assignment/Lab/Midterm/Exam), `__DEV__`-only sign-out icon in header; scroll resets to top on filter or completed-toggle change; `isThisWeek` is today→+7 days only (past-due tasks excluded)
 - `app/(tabs)/todo/[id].tsx` — **built**: task detail; done toggle, due date, type label, source badge, active "Break this down" button (loading spinner while pending), subtask section (renders `SubtaskRow` list on breakdown success), delete/remove action
 - `app/(tabs)/schedule/index.tsx` — skeleton
 - `app/(tabs)/profile/index.tsx` — skeleton
@@ -135,7 +136,7 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `src/components/chat/ChatInput.tsx` — `onSend` + `disabled` prop; pull styles from `chat.ts`
 - `src/components/chat/TypingIndicator.tsx` — staggered dot animation; pull styles from `chat.ts`
 - `src/components/todo/TaskFilterBar.tsx` — All / This Week / Overdue / Starred pill filter; `TaskFilter` type exported
-- `src/components/todo/TaskRow.tsx` — swipeable row; circular done checkbox (bidirectional), title, due date (relative + urgent colour), weight badge, star toggle; swipe-left = delete action; `weightLabel`/`weightColor` thresholds corrected to real weight scale (2.8/2.0/1.3/0.8)
+- `src/components/todo/TaskRow.tsx` — swipeable row; circular done checkbox (bidirectional), title, due date (relative + urgent colour — "Overdue" label suppressed for done tasks, shows plain date instead), weight badge, star toggle; swipe-left = delete action; `weightLabel`/`weightColor` thresholds corrected to real weight scale (2.8/2.0/1.3/0.8)
 - `src/components/todo/SubtaskRow.tsx` — read-only subtask row; checkmark/ellipse icon reflects `done` state; shows `suggested_start` hint if present
 - `src/types/api.ts` — all API interfaces (`User`, `Course`, `Task`, `TaskSubtask`, `ScheduleBlock`, `HeatEntry`, `Major`, `MajorGoal`, `ChatMessage`, `SyllabusMeta`, `IcsStatus`) + type aliases (`FlowMode`, `EnrollmentStatus`, etc.)
 - `src/wizard/CoachMarkWizard.tsx` — orchestrator; reads `wizardCompleted`; calls `startWizard()` on mount; navigates to Schedule tab (step 1) and Chat tab (step 2) via `router.navigate`
@@ -148,17 +149,9 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 
 ## What's Next (in order)
 
-### 1. TODO tab — remaining gaps
+### 1. ✅ TODO tab — complete
 
-**a) ✅ Overdue display** — resolved via dedicated Overdue filter tab + mark-all bulk action.
-
-**b) ✅ Add task create form** — live in `todo/index.tsx`; title + optional due date + weight type pills (Assignment 1.0 / Lab 1.5 / Midterm 2.5 / Exam 3.0).
-
-**c) Course grouping** — Deferred: `GET /tasks` returns `course_id` only; no `GET /courses` endpoint exists. Flat list is acceptable for the user study.
-
-**d) ✅ Subtask section + breakdown wiring** — live in `todo/[id].tsx`; active breakdown button with loading spinner; subtask section appears above button after breakdown runs.
-
-**e) No `GET /tasks/:id` endpoint** — `todo/[id].tsx` reads the task from the React Query cache. Edge case: deep-linking directly to a task detail with no prior list fetch shows a spinner indefinitely. Low priority for now.
+All gaps resolved. Known deferred items: course grouping (no `GET /courses` endpoint — flat list acceptable for user study); deep-link to task detail without prior list fetch shows spinner indefinitely (low priority).
 
 ### 2. Schedule tab — `schedule/index.tsx` skeleton
 Create `src/api/schedule.ts` + `src/hooks/useSchedule.ts` + `useHeat.ts`; add `WeekCalendar`, `HeatMapBar`, `BlockCard` components; block CRUD bottom sheets.
