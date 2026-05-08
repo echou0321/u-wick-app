@@ -19,5 +19,6 @@ export function completeOnboarding() {
 }
 
 export function updatePushToken(expoPushToken: string) {
-  return client.patch('/users/me/push-token', { expoPushToken }).then((res) => res.data);
+  // Backend expects { token } in the request body.
+  return client.patch('/users/me/push-token', { token: expoPushToken }).then((res) => res.data);
 }
