@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { bubbleStyles as styles } from '@/src/styles/chat';
+import Markdown from 'react-native-markdown-display';
+import { bubbleStyles as styles, markdownStyles } from '@/src/styles/chat';
 import type { ChatMessage } from '@/src/types/api';
 
 interface ChatBubbleProps {
@@ -13,7 +14,11 @@ export function ChatBubble({ message }: ChatBubbleProps) {
   return (
     <View style={[styles.wrapper, isBot ? styles.wrapperBot : styles.wrapperUser]}>
       <View style={[styles.bubble, isBot ? styles.bubbleBot : styles.bubbleUser]}>
-        <Text style={styles.text}>{message.content}</Text>
+        {isBot ? (
+          <Markdown style={markdownStyles}>{message.content}</Markdown>
+        ) : (
+          <Text style={styles.text} selectable>{message.content}</Text>
+        )}
       </View>
     </View>
   );

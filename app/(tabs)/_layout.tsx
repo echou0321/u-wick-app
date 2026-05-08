@@ -41,7 +41,6 @@ export default function TabsLayout() {
           name="profile"
           options={{ title: 'Profile', tabBarIcon: tabIcon('person-outline') }}
         />
-        <Tabs.Screen name="todo/[id]" options={{ href: null }} />
       </Tabs>
       <CoachMarkWizard />
     </View>

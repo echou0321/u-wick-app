@@ -111,7 +111,8 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `app/(onboarding)/profile.tsx` — current_quarter + enrollment_status segmented control + optional major; `PATCH /users/me`; navigates to `/notifications`
 - `app/(onboarding)/notifications.tsx` — 3 feature rows; "Enable Notifications" requests OS permission + Expo push token + `PATCH /users/me/push-token`; "Skip for now" path; both paths call `POST /users/me/onboarding/complete` + fire-and-forget `POST /sessions/start` → `/(tabs)/chat`
 - `app/(tabs)/_layout.tsx` — 4 tabs: Chat / TODO / Schedule / Profile; Ionicons; wraps Tabs in View + mounts `<CoachMarkWizard />` as absolute overlay
-- `app/(tabs)/chat/index.tsx` — **in progress (chat_branch)**: per-flow message history (loads from React Query, lives in local state during session), SSE streaming via XHR + `onprogress` (token → streaming bubble → finalized message), clear-conversation Alert (`DELETE /chat/history?flow=`), offline banner, `FlowPill` in header, `ShortcutBar` shortcuts with enrollment-gated "Major advising"; **known gaps / needs testing**: markdown rendering in bubbles, scroll-to-bottom edge cases, session start before first message, wizard Step 2 "coming soon" copy not yet removed
+- `app/(tabs)/todo/_layout.tsx` — Stack navigator (`headerShown: false`) for the TODO tab; required so `todo/[id]` can push/pop correctly via `router.back()`
+- `app/(tabs)/chat/index.tsx` — **in progress (chat_branch)**: per-flow message history (loads from React Query, lives in local state during session), SSE streaming via XHR + `onprogress` (token → streaming bubble → finalized message), clear-conversation Alert (`DELETE /chat/history?flow=`), offline banner, `FlowPill` in header, `ShortcutBar` shortcuts with enrollment-gated "Major advising"; assistant bubbles render markdown via `react-native-markdown-display`; **known gaps / needs testing**: scroll-to-bottom edge cases, session start before first message, wizard Step 2 "coming soon" copy not yet removed
 - `app/(tabs)/todo/index.tsx` — **built**: task list with All/This Week/Overdue/Starred filter bar, pull-to-refresh (invalidates all `['tasks']` keys), bidirectional done toggle (checkbox on each row + undo toast), sort by due date or weight (header icon), mark-all-overdue-done bulk action, swipe-to-delete (hard delete for manual/ai/syllabus; soft delete for ICS), show-completed toggle (fixed row above list, scoped to active filter), ICS import modal (cloud icon in header + CTA in empty state), add-task form (title + optional YYYY-MM-DD due date + weight type pills: Assignment/Lab/Midterm/Exam), `__DEV__`-only sign-out icon in header; scroll resets to top on filter or completed-toggle change; `isThisWeek` is today→+7 days only (past-due tasks excluded)
 - `app/(tabs)/todo/[id].tsx` — **built**: task detail; done toggle, due date, type label, source badge, active "Break this down" button (loading spinner while pending), subtask section (renders `SubtaskRow` list on breakdown success), delete/remove action
 - `app/(tabs)/schedule/index.tsx` — skeleton
@@ -128,12 +129,12 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `src/stores/uiStore.ts` — heatMap / offline / wizard state; `heatMapVisible` + `wizardCompleted` persisted to AsyncStorage; `startWizard()` sets wizardStep to 1
 - `src/styles/forms.ts` — `formStyles`: card/form/input/button pattern (auth + onboarding screens)
 - `src/styles/components.ts` — `cardStyles`, `badgeStyles`: generic UI components
-- `src/styles/chat.ts` — `bubbleStyles`, `inputStyles`, `typingStyles`, `flowPillStyles`, `shortcutBarStyles`, `chatScreenStyles`: chat components
+- `src/styles/chat.ts` — `bubbleStyles`, `inputStyles`, `typingStyles`, `flowPillStyles`, `shortcutBarStyles`, `chatScreenStyles`, `markdownStyles`: chat components
 - `src/styles/tabs.ts` — `tabScreenStyles`, `tabBarStyles`: tab screens + tab bar
 - `src/styles/wizard.ts` — `wizardStyles`: overlay, spotlight, slide-up card, feature rows
 - `src/styles/todo.ts` — `todoStyles`: filter bar, task row (incl. `checkBox`), swipe action, empty state, `markAllBtn`, `sortRow`, `undoToast`, detail screen
 - `src/components/ui/Card.tsx`, `Badge.tsx` — generic, pull styles from `components.ts`
-- `src/components/chat/ChatBubble.tsx` — stripped of prototype fields; uses `ChatMessage` from `src/types/api`; markdown rendering pending
+- `src/components/chat/ChatBubble.tsx` — assistant bubbles render via `react-native-markdown-display` (bold, lists, code, headings); user bubbles use plain `Text` (selectable); styles via `markdownStyles` in `chat.ts`
 - `src/components/chat/ChatInput.tsx` — `onSend` + `disabled` + `prefill` + `inputRef` props; `prefill` sets value via `useEffect` only when it changes to a new non-empty string; pull styles from `chat.ts`
 - `src/components/chat/TypingIndicator.tsx` — staggered dot animation; pull styles from `chat.ts`
 - `src/components/chat/FlowPill.tsx` — colored dot + human-readable flow label badge; label/color maps for all 5 `FlowMode` values
@@ -164,7 +165,9 @@ Create `src/api/schedule.ts` + `src/hooks/useSchedule.ts` + `useHeat.ts`; add `W
 
 ### 3. 🚧 Chat tab — in progress on `chat_branch`
 Core wiring is done (SSE streaming, per-flow history, FlowPill, ShortcutBar, clear conversation). **Many things still to test and fix before merging:**
-- Markdown rendering in assistant bubbles (currently plain text)
+- ✅ Markdown rendering in assistant bubbles (`react-native-markdown-display`)
+- ✅ `todo/[id]` navigation fixed (Stack layout added, phantom tab removed)
+- ✅ Chat bubble text selectable (iOS long-press copy)
 - Session `POST /sessions/start` before the first message if no session is active
 - Scroll-to-bottom edge cases (especially on initial history load)
 - Remove "coming soon" copy from WizardStep2 now that chat is live

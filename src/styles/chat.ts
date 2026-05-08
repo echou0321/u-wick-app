@@ -76,6 +76,66 @@ export const inputStyles = StyleSheet.create({
   },
 });
 
+export const markdownStyles = {
+  body: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+    lineHeight: FontSizes.base * 1.55,
+  },
+  strong: {
+    fontFamily: Fonts.bodyMedium,
+    color: Colors.textPrimary,
+  },
+  em: {
+    fontStyle: 'italic' as const,
+  },
+  bullet_list: {
+    marginVertical: 4,
+  },
+  ordered_list: {
+    marginVertical: 4,
+  },
+  list_item: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+  },
+  code_inline: {
+    fontFamily: 'Courier',
+    fontSize: FontSizes.sm,
+    backgroundColor: Colors.border,
+    color: Colors.accentTeal,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+  },
+  code_block: {
+    fontFamily: 'Courier',
+    fontSize: FontSizes.sm,
+    backgroundColor: Colors.border,
+    color: Colors.accentTeal,
+    borderRadius: 6,
+    padding: 10,
+    marginVertical: 4,
+  },
+  paragraph: {
+    marginTop: 0,
+    marginBottom: 6,
+  },
+  heading1: {
+    fontFamily: Fonts.heading,
+    fontSize: FontSizes.lg,
+    color: Colors.textPrimary,
+    marginBottom: 4,
+  },
+  heading2: {
+    fontFamily: Fonts.heading,
+    fontSize: FontSizes.md,
+    color: Colors.textPrimary,
+    marginBottom: 4,
+  },
+};
+
 export const flowPillStyles = StyleSheet.create({
   pill: {
     flexDirection: 'row' as const,
