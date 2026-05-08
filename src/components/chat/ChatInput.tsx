@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, TextInput, TouchableOpacity, Text } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { inputStyles as styles } from '@/src/styles/chat';
@@ -6,10 +6,20 @@ import { inputStyles as styles } from '@/src/styles/chat';
 interface ChatInputProps {
   onSend: (text: string) => void;
   disabled?: boolean;
+  prefill?: string;
+  inputRef?: React.RefObject<TextInput>;
 }
 
-export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
+export function ChatInput({ onSend, disabled = false, prefill, inputRef }: ChatInputProps) {
   const [value, setValue] = useState('');
+  const prevPrefillRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (prefill !== undefined && prefill !== '' && prefill !== prevPrefillRef.current) {
+      prevPrefillRef.current = prefill;
+      setValue(prefill);
+    }
+  }, [prefill]);
 
   function handleSend() {
     const trimmed = value.trim();
@@ -21,6 +31,7 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
   return (
     <View style={styles.row}>
       <TextInput
+        ref={inputRef}
         style={[styles.input, disabled && styles.inputDisabled]}
         placeholder="Message Wick"
         placeholderTextColor={Colors.textMuted}

@@ -30,11 +30,10 @@ import type { Task } from '@/src/types/api';
 
 type SortOrder = 'due_date' | 'weight';
 
-const WEIGHT_OPTIONS = [
-  { label: 'Assignment', value: 1.0 },
-  { label: 'Lab', value: 1.5 },
-  { label: 'Midterm', value: 2.5 },
-  { label: 'Exam', value: 3.0 },
+const PRIORITY_OPTIONS = [
+  { label: 'Low', value: 0.5, color: '#6AF7C8' },
+  { label: 'Medium', value: 1.5, color: '#F7A06A' },
+  { label: 'High', value: 3.0, color: '#F76A6A' },
 ] as const;
 
 function isThisWeek(dueDate: string | null): boolean {
@@ -99,7 +98,7 @@ export default function TodoScreen() {
   const [addTaskModalVisible, setAddTaskModalVisible] = useState(false);
   const [createTitle, setCreateTitle] = useState('');
   const [createDueDate, setCreateDueDate] = useState('');
-  const [createWeight, setCreateWeight] = useState(1.0);
+  const [createWeight, setCreateWeight] = useState(1.5);
   const [createError, setCreateError] = useState('');
 
   const qc = useQueryClient();
@@ -129,7 +128,7 @@ export default function TodoScreen() {
   function handleOpenAddTask() {
     setCreateTitle('');
     setCreateDueDate('');
-    setCreateWeight(1.0);
+    setCreateWeight(1.5);
     setCreateError('');
     setAddTaskModalVisible(true);
   }
@@ -165,7 +164,7 @@ export default function TodoScreen() {
         onPress: () => setSortOrder('due_date'),
       },
       {
-        text: `${sortOrder === 'weight' ? '✓ ' : ''}By weight (heaviest first)`,
+        text: `${sortOrder === 'weight' ? '✓ ' : ''}By priority (highest first)`,
         onPress: () => setSortOrder('weight'),
       },
       { text: 'Cancel', style: 'cancel' },
@@ -462,7 +461,7 @@ export default function TodoScreen() {
               <Text style={m.formLabel}>Title</Text>
               <TextInput
                 style={m.input}
-                placeholder="e.g. Midterm study guide"
+                placeholder="e.g. Play Stardew Valley, read chapter 4…"
                 placeholderTextColor={Colors.textMuted}
                 value={createTitle}
                 onChangeText={(t) => { setCreateTitle(t); setCreateError(''); }}
@@ -478,20 +477,26 @@ export default function TodoScreen() {
                 keyboardType="numbers-and-punctuation"
               />
 
-              <Text style={m.formLabel}>Type</Text>
+              <Text style={m.formLabel}>Priority</Text>
               <View style={m.weightRow}>
-                {WEIGHT_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt.label}
-                    style={[m.weightPill, createWeight === opt.value && m.weightPillActive]}
-                    onPress={() => setCreateWeight(opt.value)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[m.weightPillText, createWeight === opt.value && m.weightPillTextActive]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {PRIORITY_OPTIONS.map((opt) => {
+                  const active = createWeight === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.label}
+                      style={[
+                        m.weightPill,
+                        active && { backgroundColor: opt.color + '28', borderColor: opt.color },
+                      ]}
+                      onPress={() => setCreateWeight(opt.value)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[m.weightPillText, active && { color: opt.color }]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
               {createError ? <Text style={m.errorText}>{createError}</Text> : null}

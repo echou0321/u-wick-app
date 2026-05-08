@@ -414,6 +414,12 @@ The tab bar hides automatically when a nested stack screen is active (e.g. task 
 
 ## 10. Chat Tab (`/(tabs)/chat`)
 
+### Empty State — Dashboard Summary (deferred)
+
+> ⏳ **Do not implement until the chat tab is stable.** Design is decided; implementation is deferred.
+
+When the chat `FlatList` has no history for the active flow, render a compact dashboard summary card instead of a blank screen. Source data: `GET /users/me/dashboard` → `{ tasks_due_soon, schedule_today, nudges, heat_this_week }`. Suggested layout: 1–2 stacked info rows (e.g. "3 things due this week · MATH midterm tomorrow") with a subtle separator above the ShortcutBar. The moment the user sends their first message the card is replaced by normal message bubbles and never reappears in that session. No new tab or route needed — this is purely an empty-state enhancement.
+
 ### Layout
 
 ```
