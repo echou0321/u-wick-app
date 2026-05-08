@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -83,6 +83,11 @@ export default function TodoScreen() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [undoTask, setUndoTask] = useState<Task | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flatListRef = useRef<FlatList<Task>>(null);
+
+  useEffect(() => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [filter, showCompleted]);
 
   // ICS import modal state
   const [icsModalVisible, setIcsModalVisible] = useState(false);
@@ -338,12 +343,24 @@ export default function TodoScreen() {
         </TouchableOpacity>
       )}
 
+      {/* Show completed — fixed above the list so it's always reachable */}
+      <View style={s.completedRow}>
+        <Text style={s.completedRowText}>Show completed</Text>
+        <Switch
+          value={showCompleted}
+          onValueChange={setShowCompleted}
+          trackColor={{ true: Colors.primary, false: Colors.border }}
+          thumbColor={Colors.white}
+        />
+      </View>
+
       {isLoading ? (
         <View style={ts.centered}>
           <ActivityIndicator color={Colors.primary} />
         </View>
       ) : (
         <FlatList
+          ref={flatListRef}
           data={listData}
           keyExtractor={(t) => t.id}
           renderItem={({ item }) => (
@@ -356,22 +373,9 @@ export default function TodoScreen() {
             />
           )}
           ListEmptyComponent={renderEmpty}
-          ListFooterComponent={
-            <View style={s.completedRow}>
-              <Text style={s.completedRowText}>
-                {showCompleted ? 'Hide completed' : 'Show completed'}
-              </Text>
-              <Switch
-                value={showCompleted}
-                onValueChange={setShowCompleted}
-                trackColor={{ true: Colors.primary, false: Colors.border }}
-                thumbColor={Colors.white}
-              />
-            </View>
-          }
           onRefresh={() => qc.invalidateQueries({ queryKey: ['tasks'] })}
           refreshing={isRefetching}
-          contentContainerStyle={listData.length === 0 ? { flex: 1 } : undefined}
+          contentContainerStyle={listData.length === 0 ? { flex: 1 } : { paddingBottom: 32 }}
         />
       )}
 
