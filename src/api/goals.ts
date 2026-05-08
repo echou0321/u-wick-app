@@ -18,16 +18,13 @@ export interface MajorGoalRow {
 
 export function getMajorGoals(status: 'active' | 'dropped' | 'achieved' | 'all' = 'active') {
   return client.get<MajorGoalRow[]>(`/goals/major`, {
-    params: status ? { status } : undefined,
+    params: status && status !== 'all' ? { status } : undefined,
   }).then((res) => res.data);
 }
 
-export function createMajorGoal(major_req_id: string, application_deadline?: string | null) {
+export function createMajorGoal(major_req_id: string) {
   return client
-    .post('/goals/major', {
-      major_req_id,
-      application_deadline: application_deadline ?? undefined,
-    })
+    .post('/goals/major', { major_req_id })
     .then((res) => res.data);
 }
 

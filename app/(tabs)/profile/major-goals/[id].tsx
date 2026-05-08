@@ -11,7 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import type { Major } from '@/src/types/api';
 
@@ -41,12 +41,12 @@ export default function MajorGoalDetailScreen() {
   const checklistMutation = useMutation({
     mutationFn: ({ step_id, completed }: { step_id: string; completed: boolean }) =>
       updateMajorChecklist(goalId, step_id, completed),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals', 'major', 'all'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals', 'major'] }),
   });
 
   const achieveMutation = useMutation({
     mutationFn: () => dropOrAchieveMajorGoal(goalId, 'achieved'),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals', 'major', 'all'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals', 'major'] }),
   });
 
   if (goalsLoading || majorQuery.isLoading) {
@@ -110,17 +110,17 @@ export default function MajorGoalDetailScreen() {
 
           <FlatList
             data={major.checklist_steps}
-            keyExtractor={(s) => s}
+            keyExtractor={(s) => s.step_id}
             scrollEnabled={false}
             renderItem={({ item: step }) => {
-              const completed = !!goal.checklist_progress?.[step];
+              const completed = !!goal.checklist_progress?.[step.step_id];
               return (
                 <View style={styles.rowStatic}>
-                  <Text style={styles.rowLabel}>{step}</Text>
+                  <Text style={styles.rowLabel}>{step.label}</Text>
                   <Switch
                     value={completed}
                     onValueChange={(next) =>
-                      checklistMutation.mutate({ step_id: step, completed: next })
+                      checklistMutation.mutate({ step_id: step.step_id, completed: next })
                     }
                   />
                 </View>

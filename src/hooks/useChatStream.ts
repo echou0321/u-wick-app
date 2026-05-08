@@ -6,6 +6,10 @@ import type { ChatMessage, FlowMode } from '../types/api';
 
 type SideEffectAction = { type: string; [key: string]: unknown };
 
+function stripSideEffectBlocks(text: string): string {
+  return text.replace(/<side_effects>[\s\S]*?<\/side_effects>/g, '').trim();
+}
+
 function getInvalidationKeys(actions: SideEffectAction[]): string[][] {
   const keys: string[][] = [];
   const seen = new Set<string>();
@@ -82,12 +86,12 @@ export function useChatStream(flow: FlowMode) {
 
             if (event.type === 'token' && event.content) {
               accumulated += event.content;
-              setStreamingContent(accumulated);
+              setStreamingContent(stripSideEffectBlocks(accumulated));
             } else if (event.type === 'side_effects' && event.actions) {
               pendingKeys.push(...getInvalidationKeys(event.actions));
             } else if (event.type === 'done') {
               finalized = true;
-              onFinalized(accumulated);
+              onFinalized(stripSideEffectBlocks(accumulated));
               for (const key of pendingKeys) {
                 qc.invalidateQueries({ queryKey: key });
               }
@@ -135,7 +139,7 @@ export function useChatStream(flow: FlowMode) {
               parseBuffer();
             }
             if (!finalized && accumulated) {
-              onFinalized(accumulated);
+              onFinalized(stripSideEffectBlocks(accumulated));
             }
             resolve();
           };

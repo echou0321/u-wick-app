@@ -25,6 +25,7 @@ import TaskFilterBar, { TaskFilter } from '@/src/components/todo/TaskFilterBar';
 import TaskRow from '@/src/components/todo/TaskRow';
 import { useTasks, useUpdateTask, useDeleteTask, useCreateTask } from '@/src/hooks/useTasks';
 import { connectIcs } from '@/src/api/ics';
+import { logEvent } from '@/src/api/sessions';
 import { useAuthStore } from '@/src/stores/authStore';
 import type { Task } from '@/src/types/api';
 
@@ -245,6 +246,7 @@ export default function TodoScreen() {
     (task: Task) => {
       if (!task.done) {
         updateTask({ id: task.id, body: { done: true } });
+        logEvent('task_completed', { task_id: task.id }).catch(() => {});
         setUndoTask(task);
         if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
         undoTimerRef.current = setTimeout(() => setUndoTask(null), 3000);
@@ -257,19 +259,18 @@ export default function TodoScreen() {
 
   const handleDelete = useCallback(
     (task: Task) => {
-      if (task.source === 'ics') {
-        Alert.alert(
-          'Remove from list?',
-          'Canvas tasks will reappear on the next sync unless removed in Canvas itself.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Remove',
-              style: 'destructive',
-              onPress: () => updateTask({ id: task.id, body: { done: true } }),
-            },
-          ],
-        );
+      if (task.source !== 'manual') {
+        const msg = task.source === 'ics'
+          ? 'Canvas tasks will reappear on the next sync unless removed in Canvas itself.'
+          : 'Auto-generated tasks can only be removed from your active list, not permanently deleted.';
+        Alert.alert('Remove from list?', msg, [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => updateTask({ id: task.id, body: { done: true } }),
+          },
+        ]);
       } else {
         Alert.alert('Delete task?', `"${task.title}" will be permanently deleted.`, [
           { text: 'Cancel', style: 'cancel' },

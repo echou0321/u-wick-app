@@ -13,7 +13,8 @@ import { router } from 'expo-router';
 import { tabScreenStyles as styles } from '@/src/styles/tabs';
 import { useUser } from '@/src/hooks/useUser';
 import { useIcsStatus } from '@/src/hooks/useIcsStatus';
-import { syncIcs } from '@/src/api/ics';
+import { syncIcs, disconnectIcs } from '@/src/api/ics';
+import { logEvent } from '@/src/api/sessions';
 import { useAuthStore } from '@/src/stores/authStore';
 
 function fmtDate(value: string | null) {
@@ -36,8 +37,34 @@ export default function ProfileScreen() {
         qc.invalidateQueries({ queryKey: ['ics-status'] }),
         qc.invalidateQueries({ queryKey: ['tasks'] }),
       ]);
+      logEvent('ics_synced', {}).catch(() => {});
     },
   });
+
+  const disconnectMutation = useMutation({
+    mutationFn: disconnectIcs,
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['ics-status'] }),
+        qc.invalidateQueries({ queryKey: ['tasks'] }),
+      ]);
+    },
+  });
+
+  function handleDisconnectIcs() {
+    Alert.alert(
+      'Disconnect Canvas?',
+      'This will remove all Canvas tasks from your list. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: () => disconnectMutation.mutate(),
+        },
+      ],
+    );
+  }
 
   function handleLogout() {
     Alert.alert('Log out?', 'You will need to sign in again.', [
@@ -158,6 +185,15 @@ export default function ProfileScreen() {
           >
             <Text style={styles.syncBtnText}>
               {syncMutation.isPending ? 'Syncing...' : 'Sync now'}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.logoutBtn, disconnectMutation.isPending ? styles.btnDisabled : null]}
+            onPress={handleDisconnectIcs}
+            disabled={disconnectMutation.isPending}
+          >
+            <Text style={styles.logoutText}>
+              {disconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect Canvas'}
             </Text>
           </Pressable>
         </View>

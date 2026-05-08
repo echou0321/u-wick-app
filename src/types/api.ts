@@ -75,24 +75,11 @@ export interface Major {
   application_deadline: string | null;
   min_gpa: number | null;
   prereqs: Array<{ course: string; min_grade: string }>;
-  checklist_steps: string[];
+  checklist_steps: Array<{ label: string; step_id: string }>;
   last_scraped: string | null;
   notes: string | null;
 }
 
-export interface MajorGoal {
-  id: string;
-  user_id: string;
-  major_req_id: string;
-  status: 'active' | 'dropped' | 'achieved';
-  declared_at: string;
-  application_deadline: string | null;
-  checklist_progress: Record<string, boolean>;
-  reminder_30d_sent: boolean;
-  reminder_7d_sent: boolean;
-  reminder_1d_sent: boolean;
-  major: Major;
-}
 
 export interface ChatMessage {
   role: 'user' | 'assistant';

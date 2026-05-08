@@ -16,7 +16,7 @@ export function createTask(body: {
 
 export function updateTask(
   id: string,
-  body: Partial<Pick<Task, 'done' | 'highlighted' | 'title' | 'due_date' | 'weight'>>,
+  body: Partial<Pick<Task, 'done' | 'highlighted' | 'title' | 'due_date' | 'weight' | 'tag'>>,
 ) {
   return client.patch<Task>(`/tasks/${id}`, body);
 }

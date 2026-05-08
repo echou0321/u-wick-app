@@ -17,6 +17,7 @@ import { tabScreenStyles as styles } from '@/src/styles/tabs';
 import { useMajorGoals } from '@/src/hooks/useMajorGoals';
 import { useMajors } from '@/src/hooks/useMajors';
 import { createMajorGoal, dropOrAchieveMajorGoal, type MajorGoalRow } from '@/src/api/goals';
+import { logEvent } from '@/src/api/sessions';
 
 function fmtDate(value: string | null) {
   if (!value) return '—';
@@ -42,16 +43,12 @@ export default function MajorGoalsScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const createMutation = useMutation({
-    mutationFn: ({
-      majorReqId,
-      application_deadline,
-    }: {
-      majorReqId: string;
-      application_deadline?: string | null;
-    }) => createMajorGoal(majorReqId, application_deadline ?? null),
+    mutationFn: ({ majorReqId }: { majorReqId: string }) =>
+      createMajorGoal(majorReqId),
     onSuccess: (created: any) => {
       qc.invalidateQueries({ queryKey: ['goals', 'major', 'active'] });
       setPickerOpen(false);
+      logEvent('major_goal_set', { goal_id: created?.id }).catch(() => {});
       const createdId = created?.id;
       if (createdId) {
         router.push(`/(tabs)/profile/major-goals/${createdId}`);
@@ -172,8 +169,11 @@ export default function MajorGoalsScreen() {
 
       <Modal visible={pickerOpen} animationType="slide" onRequestClose={() => setPickerOpen(false)}>
         <SafeAreaView style={styles.safe}>
-          <View style={styles.header}>
+          <View style={[styles.header, styles.headerRow]}>
             <Text style={styles.title}>Choose a major</Text>
+            <Pressable onPress={() => setPickerOpen(false)}>
+              <Text style={styles.rowValue}>✕ Close</Text>
+            </Pressable>
           </View>
 
           {majorsLoading ? (
@@ -196,10 +196,7 @@ export default function MajorGoalsScreen() {
                     createMutation.isPending ? { opacity: 0.6 } : null,
                   ]}
                   onPress={() => {
-                    createMutation.mutate({
-                      majorReqId: item.id,
-                      application_deadline: item.application_deadline ?? null,
-                    });
+                    createMutation.mutate({ majorReqId: item.id });
                   }}
                   accessibilityRole="button"
                   accessibilityLabel={`Select major ${item.major_name}`}

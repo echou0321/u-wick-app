@@ -24,6 +24,7 @@ import { ChatBubble } from '@/src/components/chat/ChatBubble';
 import { ChatInput } from '@/src/components/chat/ChatInput';
 import { TypingIndicator } from '@/src/components/chat/TypingIndicator';
 import { ShortcutBar } from '@/src/components/chat/ShortcutBar';
+import { startSession } from '@/src/api/sessions';
 import type { ChatMessage, FlowMode } from '@/src/types/api';
 
 type DisplayItem =
@@ -57,6 +58,7 @@ export default function ChatScreen() {
   const [initialized, setInitialized] = useState(false);
   const [prefill, setPrefill] = useState('');
   const listRef = useRef<FlatList>(null);
+  const sessionStarted = useRef(false);
 
   const visibleTabs = ALL_TABS.filter(
     (t) => !(t.flow === 'advising' && user?.enrollment_status === 'in-major'),
@@ -94,6 +96,11 @@ export default function ChatScreen() {
       created_at: new Date().toISOString(),
     };
     setLocalMessages((prev) => [...prev, userMsg]);
+
+    if (!sessionStarted.current) {
+      sessionStarted.current = true;
+      startSession(activeFlow).catch(() => {});
+    }
 
     sendMessage(text, [...localMessages, userMsg], (assistantContent) => {
       if (!assistantContent) return;

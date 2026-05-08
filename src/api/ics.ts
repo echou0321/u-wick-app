@@ -15,3 +15,7 @@ export async function getIcsStatus(): Promise<IcsStatus> {
   const res = await client.get<IcsStatus>('/ics/status');
   return res.data;
 }
+
+export async function disconnectIcs(): Promise<void> {
+  await client.delete('/ics/disconnect');
+}

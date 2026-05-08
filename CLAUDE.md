@@ -157,38 +157,86 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 
 ---
 
+## Integration Sprint — Tab Stitching & Bug Fixes
+
+Cross-tab audit completed 2026-05-08. All 4 main tabs and all profile sub-screens are built by the team. This sprint closes the gaps between them before user-study testing. Work in this order; do not start Syllabus or Dashboard until all items below are checked off.
+
+### P1 — Crash & stale-data bugs ✅ DONE
+
+- [x] **`app/(tabs)/profile/major-goals/[id].tsx` — missing `router` import** — fixed
+- [x] **`app/(tabs)/profile/major-goals/[id].tsx` — React Query key mismatch** — both mutations now invalidate `['goals', 'major']` (prefix match)
+
+### P2 — Type correctness ✅ DONE
+
+- [x] **`src/api/tasks.ts`** — `'tag'` added to `updateTask` Pick
+- [x] **`src/types/api.ts`** — dead `MajorGoal` interface removed
+
+### P3 — Session logging ✅ DONE
+
+- [x] `todo/index.tsx` — `task_completed`
+- [x] `todo/[id].tsx` — `task_completed` + `task_breakdown_requested`
+- [x] `profile/major-goals.tsx` — `major_goal_set`
+- [x] `profile/index.tsx` — `ics_synced`
+- [x] `chat/index.tsx` — `startSession` guard (`sessionStarted` ref, fires once before first message)
+
+### P4 — Missing profile feature ✅ DONE
+
+- [x] **`src/api/ics.ts`** — `disconnectIcs()` added (`DELETE /ics/disconnect`)
+- [x] **`profile/index.tsx`** — "Disconnect Canvas" destructive Pressable with Alert confirmation; invalidates `['ics-status']` + `['tasks']`
+
+### Additional Bug Fixes — 2026-05-08 (found during live testing)
+
+**Chat tab**
+- `useChatStream.ts` — `<side_effects>…</side_effects>` XML blocks leaked into token stream and were rendered inside assistant bubbles; now stripped before display and finalization via `stripSideEffectBlocks()`
+
+**TODO tab**
+- `todo/index.tsx` + `todo/[id].tsx` — delete gated only on `source === 'ics'`; backend returns 403 for `ai` and `syllabus` sources too; now all `source !== 'manual'` tasks use done-toggle (soft remove) with source-appropriate alert message
+- `todo/[id].tsx` — task title in detail header used `ts.title` (Syne ExtraBold 20px, `numberOfLines=1`) causing truncation; changed to `DMSans_500Medium` 15px, `numberOfLines=2`
+
+**Profile — Major Goals**
+- `major-goals.tsx` — "Choose a major" modal had no close button (only Android back gesture); added "✕ Close" pressable to modal header
+- `src/api/goals.ts` — `POST /goals/major` body was sending `majorReqId` (camelCase) then `major_req_id` mismatch; now correctly sends `{ major_req_id }` (snake_case) matching backend validation; `application_deadline` removed from body (backend derives it from the major requirements row)
+- `src/types/api.ts` — `Major.checklist_steps` was typed as `string[]`; actual API response is `Array<{ label: string; step_id: string }>`; type corrected and detail screen FlatList updated to use `step.step_id` / `step.label`
+- `src/api/goals.ts` — `getMajorGoals('all')` was sending `?status=all` which the backend doesn't recognise; now omits the param when `status === 'all'` (no filter = all goals)
+
+### Known bugs — needs further investigation (all tabs affected)
+
+> **Do not mark any tab as "complete" yet.** Live device testing has surfaced bugs in all 4 tabs. Fix bugs before building new features (Syllabus, Dashboard, push deep-links).
+
+- **Chat**: SSE side-effect invalidation may not be firing correctly (backend may only embed side effects in token stream, not as a separate `side_effects` event); needs verification that tasks/schedule actually update after Claude actions
+- **TODO**: tag display unverified — tags only generated for `source=manual` tasks; confirm backend is returning non-null `tag` on `POST /tasks` response
+- **Profile / Major Goals**: goal detail screen still under active debugging — checklist rendering, goal creation flow, and `GET /majors/:id` call all need end-to-end verification
+- **Schedule**: not yet tested on device; block CRUD and heat map toggle untested
+
+### Deferred — out of scope until bugs resolved
+
+- Syllabus text-paste flow (`profile/syllabus-upload.tsx`)
+- Dashboard / chat empty state
+- Push notification deep links — requires EAS Build
+
+---
+
 ## What's Next (in order)
 
 ### 1. ✅ TODO tab — complete
 
 All gaps resolved. Known deferred items: course grouping (no `GET /courses` endpoint — flat list acceptable for user study); deep-link to task detail without prior list fetch shows spinner indefinitely (low priority).
 
-### 2. Schedule tab — `schedule/index.tsx` skeleton
-Create `src/api/schedule.ts` + `src/hooks/useSchedule.ts` + `useHeat.ts`; add `WeekCalendar`, `HeatMapBar`, `BlockCard` components; block CRUD bottom sheets.
+### 2. ✅ Schedule tab — complete
 
-### 3. 🚧 Chat tab — in progress on `chat_branch`
-Core wiring is done. **Remaining before merge:**
-- ✅ Markdown rendering in assistant bubbles (`react-native-markdown-display`)
-- ✅ `todo/[id]` navigation fixed (Stack layout added, phantom tab removed)
-- ✅ AI + user chat bubble text selectable (paragraph rule override)
-- ✅ Flow tab strip (Chat / Planning / Quarter plan / Advising) replacing FlowPill; each tab = separate conversation thread; Advising gated for in-major users
-- ✅ Context-sensitive ShortcutBar per active flow (quick prompts only, no flow-switching)
-- ✅ Fresh-account wizard fix — `resetWizard()` called on onboarding complete
-- ✅ Priority system (High/Medium/Low) replaces academic weight labels across TODO tab
-- ✅ AI-generated task `tag` field — frontend tag-ready; tag badge shown when backend returns it
-- Session `POST /sessions/start` before the first message if no session is active
-- Scroll-to-bottom edge cases (especially on initial history load)
-- Remove "coming soon" copy from `WizardStep2` now that chat is live
-- End-to-end test of all 7 side-effect types (add_task, complete_task, add_study_blocks, breakdown_task, update_checklist, schedule_alert, set_notif_active)
-- Offline state: verify disabled input + cached history renders correctly
-- Clear conversation: audit `useClearChatHistory` to confirm `?flow=` param is always sent
-- `src/api/tasks.ts` `updateTask` body type needs `tag` added so PATCH /tasks/:id can override tags
+`src/api/schedule.ts`, `src/hooks/useSchedule.ts`, `useHeat.ts` built. `ExpandableCalendar` (react-native-calendars) with heat map toggle, block CRUD modal, offline banner. `study_block_added` and `heat_map_toggled` session events wired. Block type pills (study / class / commitment / other); class blocks read-only.
 
-### 4. Profile tab — `profile/index.tsx` full build
-Wire to `useUser`; enrollment-gated Major Goals link; ICS status + sync + disconnect (`DELETE /ics/disconnect`); push notification toggle; logout. Build sub-screens: `edit`, `courses`, `syllabus-upload`, `major-goals`, `major-goals/[id]`. All backend routes (sessions, majors, goals) are live.
+### 3. ✅ Chat tab — complete (merged to main)
 
-### 5. Session logging
-Wire remaining session events throughout the app — `src/api/sessions.ts` is built but most event calls aren't wired yet. Key events still missing: `task_completed`, `study_block_added`, `heat_map_toggled`, `task_breakdown_requested`, `ics_synced`, `major_goal_set`, `notif_tapped`.
+All flow tabs built (Chat / Planning / Quarter plan / Advising), SSE streaming, markdown bubbles, ShortcutBar, offline state, clear-conversation, wizard fixes. **Remaining item tracked in Integration Sprint P3:** session start before first message.
+
+### 4. ✅ Profile tab — complete
+
+`profile/index.tsx`, `edit.tsx`, `courses.tsx`, `notifications.tsx`, `major-goals.tsx`, `major-goals/[id].tsx` all built. Enrollment-gated Major Goals link, ICS status + sync, logout. **Remaining items tracked in Integration Sprint P1 and P4.**
+
+### 5. 🚧 Session logging — partially complete
+
+`study_block_added` and `heat_map_toggled` wired in schedule tab. Remaining events (`task_completed`, `task_breakdown_requested`, `major_goal_set`, `ics_synced`, session start in chat) tracked in Integration Sprint P3.
 
 ### 6. Push notification deep links
 EAS Build needed for physical device push. Build receive + deep-link handlers in `app/_layout.tsx`: extract `taskId`/`goalId` from notification data, route to `todo/[id]` or `profile/major-goals/[id]`, log `notif_tapped` session event.

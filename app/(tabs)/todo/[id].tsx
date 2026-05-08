@@ -3,9 +3,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
+import { Fonts, FontSizes } from '@/constants/typography';
 import { tabScreenStyles as ts } from '@/src/styles/tabs';
 import { todoStyles as s } from '@/src/styles/todo';
 import { useTask, useUpdateTask, useDeleteTask, useTasks, useSubtasks, useBreakdownTask } from '@/src/hooks/useTasks';
+import { logEvent } from '@/src/api/sessions';
 import SubtaskRow from '@/src/components/todo/SubtaskRow';
 import type { TaskSource } from '@/src/types/api';
 
@@ -66,34 +68,36 @@ export default function TaskDetailScreen() {
   const sourceStyle = SOURCE_COLORS[task.source];
 
   function handleToggleDone() {
+    if (!task!.done) logEvent('task_completed', { task_id: task!.id }).catch(() => {});
     updateTask({ id: task!.id, body: { done: !task!.done } });
   }
 
   function handleDelete() {
+    const isManual = task!.source === 'manual';
     const isIcs = task!.source === 'ics';
-    Alert.alert(
-      isIcs ? 'Remove from list?' : 'Delete task?',
-      isIcs
+    const title = isManual ? 'Delete task?' : 'Remove from list?';
+    const message = isManual
+      ? `"${task!.title}" will be permanently deleted.`
+      : isIcs
         ? 'Canvas tasks will reappear on the next sync unless removed in Canvas itself.'
-        : `"${task!.title}" will be permanently deleted.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: isIcs ? 'Remove' : 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            if (isIcs) {
-              updateTask(
-                { id: task!.id, body: { done: true } },
-                { onSuccess: () => router.back() },
-              );
-            } else {
-              deleteTask(task!.id, { onSuccess: () => router.back() });
-            }
-          },
+        : 'Auto-generated tasks can only be removed from your active list, not permanently deleted.';
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: isManual ? 'Delete' : 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          if (isManual) {
+            deleteTask(task!.id, { onSuccess: () => router.back() });
+          } else {
+            updateTask(
+              { id: task!.id, body: { done: true } },
+              { onSuccess: () => router.back() },
+            );
+          }
         },
-      ],
-    );
+      },
+    ]);
   }
 
   return (
@@ -103,7 +107,10 @@ export default function TaskDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[ts.title, { flex: 1 }]} numberOfLines={1}>
+        <Text
+          style={{ fontFamily: Fonts.bodyMedium, fontSize: FontSizes.md, color: Colors.textPrimary, flex: 1 }}
+          numberOfLines={2}
+        >
           {task.title}
         </Text>
       </View>
@@ -167,7 +174,10 @@ export default function TaskDetailScreen() {
         {/* Breakdown button */}
         <TouchableOpacity
           style={[s.breakdownBtn, isBreakingDown && { opacity: 0.6 }]}
-          onPress={() => breakdown(task.id)}
+          onPress={() => {
+            logEvent('task_breakdown_requested', { task_id: task.id }).catch(() => {});
+            breakdown(task.id);
+          }}
           disabled={isBreakingDown || isDeleting || isUpdating}
           activeOpacity={0.8}
         >
@@ -190,7 +200,7 @@ export default function TaskDetailScreen() {
         >
           <Ionicons name="trash-outline" size={18} color="#F76A6A" />
           <Text style={s.deleteBtnText}>
-            {task.source === 'ics' ? 'Remove from list' : 'Delete task'}
+            {task.source === 'manual' ? 'Delete task' : 'Remove from list'}
           </Text>
         </TouchableOpacity>
       </ScrollView>
