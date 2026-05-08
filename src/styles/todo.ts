@@ -211,9 +211,11 @@ export const todoStyles = StyleSheet.create({
   completedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 18,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   completedRowText: {
     fontFamily: Fonts.bodyMedium,

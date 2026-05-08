@@ -76,6 +76,197 @@ export const inputStyles = StyleSheet.create({
   },
 });
 
+export const markdownStyles = {
+  body: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+    lineHeight: FontSizes.base * 1.55,
+  },
+  strong: {
+    fontFamily: Fonts.bodyMedium,
+    color: Colors.textPrimary,
+  },
+  em: {
+    fontStyle: 'italic' as const,
+  },
+  bullet_list: {
+    marginVertical: 4,
+  },
+  ordered_list: {
+    marginVertical: 4,
+  },
+  list_item: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+  },
+  code_inline: {
+    fontFamily: 'Courier',
+    fontSize: FontSizes.sm,
+    backgroundColor: Colors.border,
+    color: Colors.accentTeal,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+  },
+  code_block: {
+    fontFamily: 'Courier',
+    fontSize: FontSizes.sm,
+    backgroundColor: Colors.border,
+    color: Colors.accentTeal,
+    borderRadius: 6,
+    padding: 10,
+    marginVertical: 4,
+  },
+  paragraph: {
+    marginTop: 0,
+    marginBottom: 6,
+  },
+  heading1: {
+    fontFamily: Fonts.heading,
+    fontSize: FontSizes.lg,
+    color: Colors.textPrimary,
+    marginBottom: 4,
+  },
+  heading2: {
+    fontFamily: Fonts.heading,
+    fontSize: FontSizes.md,
+    color: Colors.textPrimary,
+    marginBottom: 4,
+  },
+};
+
+export const flowPillStyles = StyleSheet.create({
+  pill: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    gap: 5,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  label: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+  },
+});
+
+export const shortcutBarStyles = StyleSheet.create({
+  container: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    height: 52,
+  },
+  scroll: {
+    paddingHorizontal: 12,
+    gap: 8,
+    alignItems: 'center' as const,
+  },
+  pill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    alignSelf: 'center' as const,
+  },
+  pillActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.bubbleUser,
+  },
+  pillText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.textSecondary,
+  },
+  pillTextActive: {
+    color: Colors.primaryLight,
+  },
+});
+
+export const flowTabStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row' as const,
+    alignItems: 'stretch' as const,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.bg,
+  },
+  scroll: {
+    flexShrink: 1,
+  },
+  scrollContent: {
+    paddingLeft: 8,
+  },
+  tab: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  label: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.textMuted,
+  },
+  labelActive: {
+    color: Colors.textPrimary,
+  },
+  clearBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    justifyContent: 'center' as const,
+    borderLeftWidth: 1,
+    borderLeftColor: Colors.border,
+  },
+});
+
+export const chatScreenStyles = StyleSheet.create({
+  messageList: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+    flexGrow: 1,
+  },
+  errorText: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.sm,
+    color: Colors.accentOrange,
+    textAlign: 'center' as const,
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  offlineBanner: {
+    backgroundColor: Colors.accentYellow,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  offlineText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.bg,
+    textAlign: 'center' as const,
+  },
+});
+
 export const typingStyles = StyleSheet.create({
   bubble: {
     backgroundColor: Colors.bubbleBot,

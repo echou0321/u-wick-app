@@ -6,7 +6,7 @@ import { Colors } from '@/constants/colors';
 import { todoStyles as s } from '@/src/styles/todo';
 import type { Task } from '@/src/types/api';
 
-function formatDueDate(dueDate: string | null): { label: string; urgent: boolean } {
+function formatDueDate(dueDate: string | null, done: boolean): { label: string; urgent: boolean } {
   if (!dueDate) return { label: 'No due date', urgent: false };
   const due = new Date(dueDate);
   const today = new Date();
@@ -14,7 +14,13 @@ function formatDueDate(dueDate: string | null): { label: string; urgent: boolean
   const dueDay = new Date(due);
   dueDay.setHours(0, 0, 0, 0);
   const diffDays = Math.round((dueDay.getTime() - today.getTime()) / 86400000);
-  if (diffDays < 0) return { label: 'Overdue', urgent: true };
+  if (diffDays < 0) {
+    if (done) {
+      const label = due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return { label: `Due ${label}`, urgent: false };
+    }
+    return { label: 'Overdue', urgent: true };
+  }
   if (diffDays === 0) return { label: 'Due today', urgent: true };
   if (diffDays === 1) return { label: 'Due tomorrow', urgent: true };
   if (diffDays <= 7) return { label: `Due in ${diffDays} days`, urgent: false };
@@ -22,20 +28,17 @@ function formatDueDate(dueDate: string | null): { label: string; urgent: boolean
   return { label: `Due ${label}`, urgent: false };
 }
 
-function weightLabel(weight: number): string {
-  if (weight >= 2.8) return 'Exam';
-  if (weight >= 2.0) return 'Midterm';
-  if (weight >= 1.3) return 'Lab / Report';
-  if (weight >= 0.8) return 'Assignment / Quiz';
-  if (weight > 0)   return 'Reading';
-  return 'Task';
+function priorityLabel(weight: number): string {
+  if (weight >= 2.0) return 'High';
+  if (weight >= 1.0) return 'Medium';
+  if (weight > 0)   return 'Low';
+  return '';
 }
 
-function weightColor(weight: number): string {
-  if (weight >= 2.8) return '#F76A6A';
-  if (weight >= 2.0) return '#F7A06A';
-  if (weight >= 1.3) return '#F7D06A';
-  if (weight >= 0.8) return Colors.primary;
+function priorityColor(weight: number): string {
+  if (weight >= 2.0) return '#F76A6A';
+  if (weight >= 1.0) return '#F7A06A';
+  if (weight > 0)   return '#6AF7C8';
   return Colors.textMuted;
 }
 
@@ -49,8 +52,9 @@ interface Props {
 
 export default function TaskRow({ task, onPress, onToggleStar, onToggleDone, onDelete }: Props) {
   const swipeRef = useRef<Swipeable>(null);
-  const { label: dueDateLabel, urgent } = formatDueDate(task.due_date);
-  const wColor = weightColor(task.weight);
+  const { label: dueDateLabel, urgent } = formatDueDate(task.due_date, task.done);
+  const pLabel = priorityLabel(task.weight);
+  const pColor = priorityColor(task.weight);
 
   function renderRightActions(
     progress: Animated.AnimatedInterpolation<number>,
@@ -91,18 +95,21 @@ export default function TaskRow({ task, onPress, onToggleStar, onToggleDone, onD
           </Text>
           <View style={s.taskMeta}>
             <Text style={[s.dueDate, urgent && s.dueDateUrgent]}>{dueDateLabel}</Text>
-            {task.weight > 0 && (
+            {pLabel ? (
               <View
                 style={[
                   s.weightBadge,
-                  { borderColor: wColor + '55', backgroundColor: wColor + '18' },
+                  { borderColor: pColor + '55', backgroundColor: pColor + '18' },
                 ]}
               >
-                <Text style={[s.weightBadgeText, { color: wColor }]}>
-                  {weightLabel(task.weight)}
-                </Text>
+                <Text style={[s.weightBadgeText, { color: pColor }]}>{pLabel}</Text>
               </View>
-            )}
+            ) : null}
+            {task.tag ? (
+              <View style={[s.weightBadge, { borderColor: Colors.borderSubtle, backgroundColor: Colors.surfaceRaised }]}>
+                <Text style={[s.weightBadgeText, { color: Colors.textMuted }]}>{task.tag}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
         <TouchableOpacity style={s.starBtn} onPress={onToggleStar} hitSlop={8}>

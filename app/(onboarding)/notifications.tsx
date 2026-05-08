@@ -11,6 +11,7 @@ import * as Notifications from 'expo-notifications';
 import { Ionicons } from '@expo/vector-icons';
 import { updatePushToken, completeOnboarding } from '@/src/api/users';
 import { startSession } from '@/src/api/sessions';
+import { useUIStore } from '@/src/stores/uiStore';
 import { formStyles as styles } from '@/src/styles/forms';
 import { Colors } from '@/constants/colors';
 import { Fonts, FontSizes } from '@/constants/typography';
@@ -40,6 +41,7 @@ export default function NotificationsScreen() {
     try {
       await completeOnboarding();
     } catch {}
+    useUIStore.getState().resetWizard();
     startSession('free'); // fire-and-forget
     router.replace('/(tabs)/chat');
   }

@@ -38,6 +38,7 @@ export interface Task {
   title: string;
   due_date: string | null;
   weight: number;
+  tag: string | null;
   source: TaskSource;
   ics_uid: string | null;
   done: boolean;

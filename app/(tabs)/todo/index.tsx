@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -30,33 +30,39 @@ import type { Task } from '@/src/types/api';
 
 type SortOrder = 'due_date' | 'weight';
 
-const WEIGHT_OPTIONS = [
-  { label: 'Assignment', value: 1.0 },
-  { label: 'Lab', value: 1.5 },
-  { label: 'Midterm', value: 2.5 },
-  { label: 'Exam', value: 3.0 },
+const PRIORITY_OPTIONS = [
+  { label: 'Low', value: 0.5, color: '#6AF7C8' },
+  { label: 'Medium', value: 1.5, color: '#F7A06A' },
+  { label: 'High', value: 3.0, color: '#F76A6A' },
 ] as const;
 
 function isThisWeek(dueDate: string | null): boolean {
   if (!dueDate) return false;
   const due = new Date(dueDate);
-  const weekFromNow = new Date();
-  weekFromNow.setDate(weekFromNow.getDate() + 7);
-  return due <= weekFromNow;
+  due.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const weekFromNow = new Date(today);
+  weekFromNow.setDate(today.getDate() + 7);
+  return due >= today && due <= weekFromNow;
 }
 
-function isOverdue(task: Task): boolean {
-  if (!task.due_date || task.done) return false;
+function isPastDue(task: Task): boolean {
+  if (!task.due_date) return false;
   const due = new Date(task.due_date);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return due < today;
 }
 
-function applyFilter(tasks: Task[], filter: TaskFilter): Task[] {
+function isOverdue(task: Task): boolean {
+  return !task.done && isPastDue(task);
+}
+
+function applyFilter(tasks: Task[], filter: TaskFilter, forDone = false): Task[] {
   if (filter === 'starred') return tasks.filter((t) => t.highlighted);
   if (filter === 'week') return tasks.filter((t) => isThisWeek(t.due_date));
-  if (filter === 'overdue') return tasks.filter(isOverdue);
+  if (filter === 'overdue') return tasks.filter(forDone ? isPastDue : isOverdue);
   return tasks;
 }
 
@@ -76,6 +82,11 @@ export default function TodoScreen() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [undoTask, setUndoTask] = useState<Task | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flatListRef = useRef<FlatList<Task>>(null);
+
+  useEffect(() => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [filter, showCompleted]);
 
   // ICS import modal state
   const [icsModalVisible, setIcsModalVisible] = useState(false);
@@ -87,7 +98,7 @@ export default function TodoScreen() {
   const [addTaskModalVisible, setAddTaskModalVisible] = useState(false);
   const [createTitle, setCreateTitle] = useState('');
   const [createDueDate, setCreateDueDate] = useState('');
-  const [createWeight, setCreateWeight] = useState(1.0);
+  const [createWeight, setCreateWeight] = useState(1.5);
   const [createError, setCreateError] = useState('');
 
   const qc = useQueryClient();
@@ -101,9 +112,9 @@ export default function TodoScreen() {
 
   const filtered = applyFilter(activeTasks ?? [], filter);
   const sorted = sortTasks(filtered, sortOrder);
-  const listData: Task[] = showCompleted
-    ? [...sorted, ...(doneTasks ?? [])]
-    : sorted;
+  const filteredDone = applyFilter(doneTasks ?? [], filter, true);
+  const sortedDone = sortTasks(filteredDone, sortOrder);
+  const listData: Task[] = showCompleted ? [...sorted, ...sortedDone] : sorted;
 
   const overdueList = applyFilter(activeTasks ?? [], 'overdue');
 
@@ -117,7 +128,7 @@ export default function TodoScreen() {
   function handleOpenAddTask() {
     setCreateTitle('');
     setCreateDueDate('');
-    setCreateWeight(1.0);
+    setCreateWeight(1.5);
     setCreateError('');
     setAddTaskModalVisible(true);
   }
@@ -153,7 +164,7 @@ export default function TodoScreen() {
         onPress: () => setSortOrder('due_date'),
       },
       {
-        text: `${sortOrder === 'weight' ? '✓ ' : ''}By weight (heaviest first)`,
+        text: `${sortOrder === 'weight' ? '✓ ' : ''}By priority (highest first)`,
         onPress: () => setSortOrder('weight'),
       },
       { text: 'Cancel', style: 'cancel' },
@@ -331,12 +342,24 @@ export default function TodoScreen() {
         </TouchableOpacity>
       )}
 
+      {/* Show completed — fixed above the list so it's always reachable */}
+      <View style={s.completedRow}>
+        <Text style={s.completedRowText}>Show completed</Text>
+        <Switch
+          value={showCompleted}
+          onValueChange={setShowCompleted}
+          trackColor={{ true: Colors.primary, false: Colors.border }}
+          thumbColor={Colors.white}
+        />
+      </View>
+
       {isLoading ? (
         <View style={ts.centered}>
           <ActivityIndicator color={Colors.primary} />
         </View>
       ) : (
         <FlatList
+          ref={flatListRef}
           data={listData}
           keyExtractor={(t) => t.id}
           renderItem={({ item }) => (
@@ -349,22 +372,9 @@ export default function TodoScreen() {
             />
           )}
           ListEmptyComponent={renderEmpty}
-          ListFooterComponent={
-            <View style={s.completedRow}>
-              <Text style={s.completedRowText}>
-                {showCompleted ? 'Hide completed' : 'Show completed'}
-              </Text>
-              <Switch
-                value={showCompleted}
-                onValueChange={setShowCompleted}
-                trackColor={{ true: Colors.primary, false: Colors.border }}
-                thumbColor={Colors.white}
-              />
-            </View>
-          }
           onRefresh={() => qc.invalidateQueries({ queryKey: ['tasks'] })}
           refreshing={isRefetching}
-          contentContainerStyle={listData.length === 0 ? { flex: 1 } : undefined}
+          contentContainerStyle={listData.length === 0 ? { flex: 1 } : { paddingBottom: 32 }}
         />
       )}
 
@@ -451,7 +461,7 @@ export default function TodoScreen() {
               <Text style={m.formLabel}>Title</Text>
               <TextInput
                 style={m.input}
-                placeholder="e.g. Midterm study guide"
+                placeholder="e.g. Play Stardew Valley, read chapter 4…"
                 placeholderTextColor={Colors.textMuted}
                 value={createTitle}
                 onChangeText={(t) => { setCreateTitle(t); setCreateError(''); }}
@@ -467,20 +477,26 @@ export default function TodoScreen() {
                 keyboardType="numbers-and-punctuation"
               />
 
-              <Text style={m.formLabel}>Type</Text>
+              <Text style={m.formLabel}>Priority</Text>
               <View style={m.weightRow}>
-                {WEIGHT_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt.label}
-                    style={[m.weightPill, createWeight === opt.value && m.weightPillActive]}
-                    onPress={() => setCreateWeight(opt.value)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[m.weightPillText, createWeight === opt.value && m.weightPillTextActive]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {PRIORITY_OPTIONS.map((opt) => {
+                  const active = createWeight === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.label}
+                      style={[
+                        m.weightPill,
+                        active && { backgroundColor: opt.color + '28', borderColor: opt.color },
+                      ]}
+                      onPress={() => setCreateWeight(opt.value)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[m.weightPillText, active && { color: opt.color }]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
               {createError ? <Text style={m.errorText}>{createError}</Text> : null}
