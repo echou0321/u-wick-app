@@ -22,6 +22,24 @@ import { getMajor } from '@/src/api/majors';
 import { updateMajorChecklist, dropOrAchieveMajorGoal } from '@/src/api/goals';
 import { useMajorGoals } from '@/src/hooks/useMajorGoals';
 
+/** Catalog uses free-text deadlines; goals use TIMESTAMPTZ when set — show both sensibly. */
+function formatDeadlineDisplay(value: string | null | undefined): string {
+  if (value == null || String(value).trim() === '') return '—';
+  const raw = String(value).trim();
+  const d = new Date(raw);
+  if (!Number.isNaN(d.getTime()) && (/^\d{4}-\d{2}-\d{2}/.test(raw) || raw.includes('T'))) {
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+  return raw;
+}
+
+function formatMinGpa(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—';
+  const n = typeof v === 'number' ? v : parseFloat(String(v));
+  if (Number.isNaN(n)) return '—';
+  return String(n);
+}
+
 export default function MajorGoalDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const goalId = Array.isArray(id) ? id[0] : id;
@@ -102,6 +120,9 @@ export default function MajorGoalDetailScreen() {
   }
 
   const major = majorQuery.data as Major;
+  const displayDeadline = goal.application_deadline ?? major.application_deadline;
+  const displayGpa = major.min_gpa ?? goal.min_gpa;
+  const sourceUrl = major.source_url?.trim() ?? '';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -127,20 +148,36 @@ export default function MajorGoalDetailScreen() {
       <ScrollView contentContainerStyle={styles.profileBody}>
         <View style={styles.profileCard}>
           <Text style={styles.rowLabel}>Application deadline</Text>
-          <Text style={styles.rowValue}>{goal.application_deadline ?? '—'}</Text>
+          <Text style={styles.rowValue}>{formatDeadlineDisplay(displayDeadline)}</Text>
 
           <Text style={{ ...styles.rowLabel, marginTop: 10 }}>Minimum GPA</Text>
-          <Text style={styles.rowValue}>{major.min_gpa ?? goal.min_gpa ?? '—'}</Text>
+          <Text style={styles.rowValue}>{formatMinGpa(displayGpa)}</Text>
 
-          {major.source_url ? (
-            <Pressable
-              style={styles.rowBtn}
-              onPress={() => Linking.openURL(major.source_url ?? '')}
-            >
-              <Text style={styles.rowLabel}>View on UW website</Text>
-              <Text style={styles.rowValue}>›</Text>
-            </Pressable>
-          ) : null}
+          {sourceUrl ? (
+            <>
+              <Text style={{ ...styles.rowLabel, marginTop: 10 }}>View on UW website</Text>
+              <Text
+                style={[
+                  styles.rowValue,
+                  {
+                    marginTop: 4,
+                    alignSelf: 'stretch',
+                    textAlign: 'center',
+                    color: Colors.primaryLight,
+                  },
+                ]}
+                selectable
+                accessibilityRole="link"
+                onPress={() => Linking.openURL(sourceUrl)}
+              >
+                {sourceUrl}
+              </Text>
+            </>
+          ) : (
+            <View style={{ ...styles.rowStatic, marginTop: 10 }}>
+              <Text style={styles.placeholder}>No official program link on file.</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.listCard}>

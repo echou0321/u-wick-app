@@ -49,6 +49,7 @@ For local backend dev: `EXPO_PUBLIC_API_URL=http://localhost:3000/api`
 - All `PATCH` mutations must invalidate their React Query key on success; side effects from SSE must invalidate affected keys after `done` event
 - `req.user.id` pattern from backend maps to JWT payload `id` field — decode with `jwtDecode()` client-side to get userId without an extra API call
 - `PATCH /goals/major/:id/checklist` body uses `{ step_id, completed: bool }` — field is `completed`, not `done` (backend deviation from design doc)
+- Major goal mutations (create, achieve, drop, checklist) must invalidate **both** React Query keys `['goals', 'major', 'active']` and `['goals', 'major', 'all']` so the list screen and `[id]` detail (which uses `all`) never disagree after navigation
 - `DELETE /tasks/:id` returns 403 for ICS/syllabus/ai-sourced tasks — always check `task.source` before calling delete; use done-toggle (soft remove) for ICS tasks
 - Syllabus route is `POST /syllabus` (not `/syllabus/upload`) — text-paste only, no file upload
 - `DELETE /chat/history` requires `?flow=<flowMode>` query param — omitting it returns 400
@@ -65,7 +66,7 @@ Backend fully deployed — 166 tests passing, 10 suites. All routes live as of 2
 | Feature Group | Backend Routes | Frontend Status |
 |---|---|---|
 | Auth | POST /auth/register, POST /auth/login | ✅ Build now |
-| User profile | GET /me, PATCH /me, POST /me/onboarding/complete, PATCH /me/push-token | ✅ Build now |
+| User profile | GET /me, PATCH /me, POST /me/onboarding/complete, PATCH /me/push-token | ✅ Live — Profile tab (`index`, `edit`, `notifications`) |
 | Dashboard | GET /users/me/dashboard → `{ tasks_due_soon, schedule_today, nudges, heat_this_week }` | ✅ Live — no frontend hook yet; useful for profile tab or home preload |
 | ICS | POST /ics/connect, POST /ics/sync, GET /ics/status, DELETE /ics/disconnect | ✅ Build now; DELETE /ics/disconnect hard-deletes all ICS tasks + courses; not yet wired in frontend |
 | Tasks (read/edit) | GET /tasks, PATCH /tasks/:id, DELETE /tasks/:id | ✅ Build now; DELETE returns 403 for ICS/syllabus/ai sources — frontend swipe-delete already handles this |
@@ -74,9 +75,9 @@ Backend fully deployed — 166 tests passing, 10 suites. All routes live as of 2
 | Task subtasks | GET /tasks/:id/subtasks, POST /tasks/:id/breakdown | ✅ Both live — build SubtaskRow + useSubtasks hook; wire "Break this down" button |
 | Schedule | GET /schedule, POST/PATCH/DELETE /schedule/blocks, GET /schedule/heat | ✅ Build now |
 | Sessions | POST /sessions/start, POST /sessions/event, POST /sessions/end | ✅ Live — fire-and-forget calls already in onboarding; wire remaining events throughout app |
-| Majors | GET /majors, GET /majors/:id | ✅ Live — build profile/major-goals screens |
-| Goals | POST /goals/major, GET /goals/major, PATCH /goals/major/:id, PATCH /goals/major/:id/checklist | ✅ Live — checklist PATCH body uses `completed` (not `done`) |
-| Push token | PATCH /me/push-token | ✅ Already wired in onboarding |
+| Majors | GET /majors, GET /majors/:id | ✅ Live — `src/api/majors.ts`, Major Goals picker + detail |
+| Goals | POST /goals/major, GET /goals/major, PATCH /goals/major/:id, PATCH /goals/major/:id/checklist | ✅ Live — `src/api/goals.ts`, checklist PATCH body uses `completed` (not `done`) |
+| Push token | PATCH /me/push-token | ✅ Live — onboarding + Profile → Notifications (`{ token }` body) |
 | Push cron delivery | Server-side cron: morning_digest, start_this_now, major_app_reminder | ✅ Live — receive + deep-link handlers can be built now; EAS Build needed for physical device testing |
 | Chat (SSE) | POST /chat, GET /chat/history, DELETE /chat/history | ✅ Fully live — all 7 side-effects wired; build full chat UI; DELETE requires `?flow=` query param or returns 400 |
 | Task breakdown | POST /tasks/:id/breakdown | ✅ Live — remove disabled state, wire button |
@@ -119,12 +120,20 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `app/(tabs)/todo/index.tsx` — **built**: task list with All/This Week/Overdue/Starred filter bar, pull-to-refresh (invalidates all `['tasks']` keys), bidirectional done toggle (checkbox on each row + undo toast), sort by due date or priority (header icon), mark-all-overdue-done bulk action, swipe-to-delete (hard delete for manual/ai/syllabus; soft delete for ICS), show-completed toggle (fixed row above list, scoped to active filter), ICS import modal (cloud icon in header + CTA in empty state), add-task form (title + optional YYYY-MM-DD due date + **priority pills: Low/Medium/High** with colors; default Medium; generic placeholder accepts any task type), `__DEV__`-only sign-out icon in header; scroll resets to top on filter or completed-toggle change; `isThisWeek` is today→+7 days only (past-due tasks excluded)
 - `app/(tabs)/todo/[id].tsx` — **built**: task detail; done toggle, due date, priority label, tag row (shown when `task.tag` non-null), source badge, active "Break this down" button (loading spinner while pending), subtask section (renders `SubtaskRow` list on breakdown success), delete/remove action
 - `app/(tabs)/schedule/index.tsx` — skeleton
-- `app/(tabs)/profile/index.tsx` — skeleton
+- `app/(tabs)/profile/_layout.tsx` — **built**: Stack (`headerShown: false`) so `edit`, `courses`, `notifications`, `major-goals`, etc. stay inside the Profile tab instead of registering as separate bottom-tab routes
+- `app/(tabs)/profile/index.tsx` — **built**: `useUser` + `useIcsStatus`; avatar initials, name, email, major · enrollment, quarter; rows to Edit Profile, My Courses, and Major Goals (**only** when `enrollment_status === 'pre-major'`, per design); Notifications row opens `notifications` with Enable/Manage from `user.notif_active`; ICS connected state, last synced (`icsStatus` / `user.ics_last_synced`), Sync now (`syncIcs` + invalidates `ics-status` + `tasks`, `ics_synced` event), Disconnect Canvas (`disconnectIcs` + confirmation); in-major card explains no goal checklist; logout → `clearAuth` + `router.replace` login
+- `app/(tabs)/profile/edit.tsx` — **built**: `display_name`, `current_quarter`, `enrollment_status` (Pre-major / In major), `major` via `updateMe`; Alert on pre-major → in-major change; uses shared `formStyles` + `tabStyles` header; **polish**: back is still `‹ Back` — verify tap target / safe area on notched devices
+- `app/(tabs)/profile/courses.tsx` — **built**: course list derived from `useTasks` grouped by `course_id`; empty state; back control
+- `app/(tabs)/profile/notifications.tsx` — **built**: `requestPermissionsAsync`, `getExpoPushTokenAsync`, `updatePushToken` with backend body `{ token }`; invalidates `['user']` on success; back control
+- `app/(tabs)/profile/major-goals.tsx` — **built**: `useMajorGoals('active')`; each goal is one row with left **color bar** (deterministic hash by `major_req_id`), major name, `›`; permanent **Add major goal** opens full-screen modal (`useMajors`, sorted list); `createMajorGoal` → navigate to new `[id]`; rich Alert on create failure (HTTP status + message + JSON); drop / achieve live on **`[id]`** detail only; invalidates both major-goal query keys on create; `major_goal_set` session event; modal header **✕ Close**; header matches detail: large `‹` chevron (32px), centered **Major Goals** title, 56px symmetric spacers
+- `app/(tabs)/profile/major-goals/[id].tsx` — **built**: goal from `useMajorGoals('all')` + `getMajor(goal.major_req_id)`; application deadline, min GPA, UW link; checklist with Ionicons **ellipse-outline** / **checkmark-circle** (todo-like), wrapping text, faded row when complete; `updateMajorChecklist`; **Mark as achieved** and **Drop goal** with `Alert` confirmations; same large-`‹` header; title `numberOfLines={1}` + ellipsis; mutations invalidate both major-goal query keys
 - `src/api/chat.ts` — `getChatHistory(flow)`, `deleteChatHistory(flow)`
 - `src/api/auth.ts` — `login()`, `register()`
-- `src/api/users.ts` — `getMe()`, `updateMe()`, `completeOnboarding()`, `updatePushToken()`
+- `src/api/users.ts` — `getMe()`, `updateMe()`, `completeOnboarding()`, `updatePushToken(expoPushToken)` → request body **`{ token }`** (backend expects `token`, not `expoPushToken`)
+- `src/api/majors.ts` — `getMajors()`, `getMajor(majorReqId)`
+- `src/api/goals.ts` — `getMajorGoals(status)` (`status === 'all'` → **omit** query param so backend returns all goals), `createMajorGoal`, `dropOrAchieveMajorGoal`, `updateMajorChecklist`; create body **`{ major_req_id }`** (snake_case)
 - `src/api/sessions.ts` — `startSession()`, `logEvent()`, `endSession()`
-- `src/api/ics.ts` — `connectIcs()`, `syncIcs()`, `getIcsStatus()`
+- `src/api/ics.ts` — `connectIcs()`, `syncIcs()`, `getIcsStatus()`, `disconnectIcs()` (`DELETE /ics/disconnect`)
 - `src/api/tasks.ts` — `getTasks()`, `createTask()`, `updateTask()`, `deleteTask()`, `getSubtasks(taskId)`, `triggerBreakdown(taskId)`
 - `src/api/client.ts` — Axios instance with JWT interceptor + 401 → `clearAuth`
 - `src/stores/authStore.ts` — token + userId; `setAuth` / `clearAuth` / `hydrate` (reads SecureStore on launch)
@@ -133,7 +142,7 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `src/styles/forms.ts` — `formStyles`: card/form/input/button pattern (auth + onboarding screens)
 - `src/styles/components.ts` — `cardStyles`, `badgeStyles`: generic UI components
 - `src/styles/chat.ts` — `bubbleStyles`, `inputStyles`, `typingStyles`, `flowPillStyles`, `shortcutBarStyles`, `chatScreenStyles`, `markdownStyles`, `flowTabStyles`: chat components; `flowTabStyles` drives the flow tab strip (row, tab, dot, label, labelActive, clearBtn)
-- `src/styles/tabs.ts` — `tabScreenStyles`, `tabBarStyles`: tab screens + tab bar
+- `src/styles/tabs.ts` — `tabScreenStyles`, `tabBarStyles`: tab screens + tab bar; **profile**: `profileCard`, list rows, avatar, sync/logout buttons, **major** goal row + `majorColorBar`, checklist row + icon + wrapped text + completed fade
 - `src/styles/wizard.ts` — `wizardStyles`: overlay, spotlight, slide-up card, feature rows
 - `src/styles/todo.ts` — `todoStyles`: filter bar, task row (incl. `checkBox`), swipe action, empty state, `markAllBtn`, `sortRow`, `undoToast`, detail screen
 - `src/components/ui/Card.tsx`, `Badge.tsx` — generic, pull styles from `components.ts`
@@ -145,12 +154,15 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `src/components/todo/TaskFilterBar.tsx` — All / This Week / Overdue / Starred pill filter; `TaskFilter` type exported
 - `src/components/todo/TaskRow.tsx` — swipeable row; circular done checkbox (bidirectional), title, due date (relative + urgent colour — "Overdue" label suppressed for done tasks, shows plain date instead), **priority badge** (High/Medium/Low with red/orange/teal colors via `priorityLabel`/`priorityColor`), **tag badge** (gray pill, shown when `task.tag` non-null), star toggle; swipe-left = delete action
 - `src/components/todo/SubtaskRow.tsx` — read-only subtask row; checkmark/ellipse icon reflects `done` state; shows `suggested_start` hint if present
-- `src/types/api.ts` — all API interfaces (`User`, `Course`, `Task`, `TaskSubtask`, `ScheduleBlock`, `HeatEntry`, `Major`, `MajorGoal`, `ChatMessage`, `SyllabusMeta`, `IcsStatus`) + type aliases (`FlowMode`, `EnrollmentStatus`, etc.); `Task` now includes `tag: string | null`
+- `src/types/api.ts` — all API interfaces (`User`, `Course`, `Task`, `TaskSubtask`, `ScheduleBlock`, `HeatEntry`, `Major`, `MajorGoal`, `ChatMessage`, `SyllabusMeta`, `IcsStatus`) + type aliases (`FlowMode`, `EnrollmentStatus`, etc.); `Task` includes `tag: string | null`; **`Major.checklist_steps`** is `Array<{ label: string; step_id: string }>` (not `string[]`)
 - `src/wizard/CoachMarkWizard.tsx` — orchestrator; reads `wizardCompleted`; calls `startWizard()` on mount; navigates to Schedule tab (step 1) and Chat tab (step 2) via `router.navigate`
 - `src/wizard/WizardStep1.tsx` — Canvas connect; dark backdrop + calendar spotlight + `Animated` slide-up card + ICS URL modal with validation + `KeyboardAvoidingView` so keyboard doesn't cover input; `POST /ics/connect` → Alert → `advanceWizard()`
 - `src/wizard/WizardStep2.tsx` — chat intro; backdrop + input-bar spotlight + slide-up card; both "Got it" and "Skip" call `advanceWizard()`
 - `src/hooks/useTasks.ts` — `useTasks(filters?)`, `useTask(id)` (cache lookup), `useUpdateTask()`, `useDeleteTask()`, `useCreateTask()`, `useSubtasks(taskId)`, `useBreakdownTask()`
 - `src/hooks/useUser.ts` — `useUser()` React Query hook; queryKey `['user']`, staleTime 5 min
+- `src/hooks/useIcsStatus.ts` — `useIcsStatus()`; queryKey `['ics-status']`, staleTime 5 min
+- `src/hooks/useMajors.ts` — `useMajors()`; catalog for major picker
+- `src/hooks/useMajorGoals.ts` — `useMajorGoals('active' | 'all')`; list uses `active`, detail + cache coherence use `all`
 - `src/hooks/useChatHistory.ts` — `useChatHistory(flow)` (staleTime 0, always fresh on mount); `useClearChatHistory()` mutation (DELETE + invalidate)
 - `src/hooks/useChatStream.ts` — SSE via XHR + `onprogress`; handles `token` / `side_effects` / `done` events; invalidates React Query keys per side-effect type; fire-and-forget `logEvent('chat_turn')`; graceful fallback if stream closes without `done`
 - `src/wizard/WizardStep3.tsx` — feature discovery; dimmed overlay + tall card with 3 icon/title/body rows; "Let's go" → `completeWizard()` (writes `wizardCompleted: true` to AsyncStorage)
@@ -164,7 +176,7 @@ Cross-tab audit completed 2026-05-08. All 4 main tabs and all profile sub-screen
 ### P1 — Crash & stale-data bugs ✅ DONE
 
 - [x] **`app/(tabs)/profile/major-goals/[id].tsx` — missing `router` import** — fixed
-- [x] **`app/(tabs)/profile/major-goals/[id].tsx` — React Query key mismatch** — both mutations now invalidate `['goals', 'major']` (prefix match)
+- [x] **`app/(tabs)/profile/major-goals/[id].tsx` — React Query key mismatch** — create / achieve / drop / checklist mutations invalidate both `['goals', 'major', 'active']` and `['goals', 'major', 'all']` (list uses `active`, detail resolves from `all`)
 
 ### P2 — Type correctness ✅ DONE
 
@@ -198,6 +210,7 @@ Cross-tab audit completed 2026-05-08. All 4 main tabs and all profile sub-screen
 - `src/api/goals.ts` — `POST /goals/major` body was sending `majorReqId` (camelCase) then `major_req_id` mismatch; now correctly sends `{ major_req_id }` (snake_case) matching backend validation; `application_deadline` removed from body (backend derives it from the major requirements row)
 - `src/types/api.ts` — `Major.checklist_steps` was typed as `string[]`; actual API response is `Array<{ label: string; step_id: string }>`; type corrected and detail screen FlatList updated to use `step.step_id` / `step.label`
 - `src/api/goals.ts` — `getMajorGoals('all')` was sending `?status=all` which the backend doesn't recognise; now omits the param when `status === 'all'` (no filter = all goals)
+- `major-goals.tsx` / `major-goals/[id].tsx` — header chrome aligned: large `‹` back chevron (32px / lineHeight 34), centered title, 56px symmetric spacers (replaces **‹ Back** label on the list screen)
 
 ### Known bugs — needs further investigation (all tabs affected)
 
@@ -205,7 +218,7 @@ Cross-tab audit completed 2026-05-08. All 4 main tabs and all profile sub-screen
 
 - **Chat**: SSE side-effect invalidation may not be firing correctly (backend may only embed side effects in token stream, not as a separate `side_effects` event); needs verification that tasks/schedule actually update after Claude actions
 - **TODO**: tag display unverified — tags only generated for `source=manual` tasks; confirm backend is returning non-null `tag` on `POST /tasks` response
-- **Profile / Major Goals**: goal detail screen still under active debugging — checklist rendering, goal creation flow, and `GET /majors/:id` call all need end-to-end verification
+- **Profile / Major Goals**: list + detail + checklist UI are implemented and device-tested; **`POST /goals/major` may still return HTTP 500** for some accounts or majors (server-side — frontend surfaces full error in Alert). **Edit Profile** back row may still need safe-area / hit-slop polish on some devices
 - **Schedule**: not yet tested on device; block CRUD and heat map toggle untested
 
 ### Deferred — out of scope until bugs resolved
@@ -232,11 +245,11 @@ All flow tabs built (Chat / Planning / Quarter plan / Advising), SSE streaming, 
 
 ### 4. ✅ Profile tab — complete
 
-`profile/index.tsx`, `edit.tsx`, `courses.tsx`, `notifications.tsx`, `major-goals.tsx`, `major-goals/[id].tsx` all built. Enrollment-gated Major Goals link, ICS status + sync, logout. **Remaining items tracked in Integration Sprint P1 and P4.**
+Stack layout + screens: `profile/index.tsx`, `edit.tsx`, `courses.tsx`, `notifications.tsx`, `major-goals.tsx`, `major-goals/[id].tsx`. Enrollment-gated Major Goals (`pre-major` only), ICS status / sync / disconnect, push token from Profile → Notifications, logout. Major picker + goal detail with checklist; shared major-goal query invalidation. **Polish:** Edit Profile back control; confirm `POST /goals/major` stable on production DB.
 
-### 5. 🚧 Session logging — partially complete
+### 5. ✅ Session logging — Integration Sprint P3 complete
 
-`study_block_added` and `heat_map_toggled` wired in schedule tab. Remaining events (`task_completed`, `task_breakdown_requested`, `major_goal_set`, `ics_synced`, session start in chat) tracked in Integration Sprint P3.
+`task_completed`, `task_breakdown_requested`, `major_goal_set`, `ics_synced`, and chat `startSession` guard are wired. Schedule tab events (`study_block_added`, `heat_map_toggled`) were already in place.
 
 ### 6. Push notification deep links
 EAS Build needed for physical device push. Build receive + deep-link handlers in `app/_layout.tsx`: extract `taskId`/`goalId` from notification data, route to `todo/[id]` or `profile/major-goals/[id]`, log `notif_tapped` session event.
