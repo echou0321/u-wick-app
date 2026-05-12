@@ -36,7 +36,7 @@ export const bubbleStyles = StyleSheet.create({
 export const inputStyles = StyleSheet.create({
   row: {
     flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+    alignItems: 'flex-end' as const,
     gap: 8,
     padding: 12,
     borderTopWidth: 1,
@@ -54,6 +54,8 @@ export const inputStyles = StyleSheet.create({
     color: Colors.textPrimary,
     fontFamily: Fonts.body,
     fontSize: FontSizes.base,
+    maxHeight: 120,
+    textAlignVertical: 'top' as const,
   },
   inputDisabled: {
     opacity: 0.5,

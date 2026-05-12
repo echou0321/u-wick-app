@@ -272,7 +272,7 @@ export default function TodoScreen() {
   }
 
   return (
-    <SafeAreaView style={ts.safe}>
+    <SafeAreaView style={ts.safe} edges={['top']}>
       {/* Header */}
       <View style={[ts.header, ts.headerRow]}>
         <Text style={ts.title}>TODO</Text>

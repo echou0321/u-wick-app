@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { SafeAreaView, Text, View, ActivityIndicator, Pressable, Alert, ScrollView } from 'react-native';
+import { Text, View, ActivityIndicator, Pressable, Alert, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTasks } from '@/src/hooks/useTasks';
 import type { Task } from '@/src/types/api';
@@ -109,14 +110,13 @@ export default function ProfileCoursesScreen() {
                 <Pressable
                   style={styles.rowBtn}
                   onPress={() =>
-                    Alert.alert(
-                      'Syllabus upload not wired yet',
-                      'This build currently lists courses based on tasks. We can add the syllabus pipeline next.',
+                    router.push(
+                      `/(tabs)/profile/syllabus-upload?courseId=${encodeURIComponent(g.courseId)}`,
                     )
                   }
                 >
                   <Text style={styles.rowLabel}>Upload Syllabus</Text>
-                  <Text style={styles.rowValue}>Coming</Text>
+                  <Text style={styles.rowValue}>›</Text>
                 </Pressable>
               </View>
             );
