@@ -18,6 +18,14 @@ client.interceptors.response.use(
     if (err.response?.status === 401) {
       useAuthStore.getState().clearAuth();
     }
+    if (__DEV__ && err.response) {
+      // Dev-only: surface failing URL + server response body so we can diagnose
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[API ${err.response.status}] ${err.config?.method?.toUpperCase()} ${err.config?.url}`,
+        { params: err.config?.params, data: err.response.data },
+      );
+    }
     return Promise.reject(err);
   },
 );

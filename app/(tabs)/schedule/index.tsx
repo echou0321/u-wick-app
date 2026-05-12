@@ -14,6 +14,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { CalendarProvider, ExpandableCalendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
@@ -29,7 +30,8 @@ import {
   useDeleteScheduleBlock,
 } from '@/src/hooks/useSchedule';
 import { logEvent } from '@/src/api/sessions';
-import type { ScheduleBlock, BlockType } from '@/src/types/api';
+import { useTasks } from '@/src/hooks/useTasks';
+import type { ScheduleBlock, BlockType, Task } from '@/src/types/api';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,8 +40,12 @@ function toDateStr(date: Date): string {
 }
 
 function quarterStart(): string {
+  // Heat map: 8 weeks ending this week. Anchor to Monday so the backend's
+  // week-grouped aggregation lines up cleanly.
   const d = new Date();
-  d.setDate(d.getDate() - 56);
+  const dow = d.getDay(); // 0=Sun..6=Sat
+  const daysSinceMonday = (dow + 6) % 7;
+  d.setDate(d.getDate() - daysSinceMonday - 49); // start of this week, then 7 weeks back
   d.setHours(0, 0, 0, 0);
   return toDateStr(d);
 }
@@ -146,6 +152,8 @@ export default function ScheduleScreen() {
   const heatStart = useMemo(() => quarterStart(), []);
   const { data: heatData } = useHeat(heatStart, 8);
   const { data: blocks, isLoading: blocksLoading } = useScheduleBlocks(rangeStart, rangeEnd);
+  // Surface all open tasks on the calendar (ICS due dates, syllabus deadlines, etc.)
+  const { data: openTasks } = useTasks({ done: false });
   const createBlock = useCreateScheduleBlock();
   const updateBlock = useUpdateScheduleBlock();
   const deleteBlock = useDeleteScheduleBlock();
@@ -161,17 +169,51 @@ export default function ScheduleScreen() {
       .sort((a, b) => a.start_time.localeCompare(b.start_time));
   }, [blocks, selectedDate]);
 
+  // Tasks (incl. ICS-imported assignments) that are due on the selected day
+  const dayTasks = useMemo<Task[]>(() => {
+    if (!openTasks) return [];
+    return openTasks
+      .filter((t) => t.due_date && toDateStr(new Date(t.due_date)) === selectedDate)
+      .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''));
+  }, [openTasks, selectedDate]);
+
   const markedDates = useMemo(() => {
-    const marks: Record<string, { marked?: boolean; dotColor?: string; selected?: boolean; selectedColor?: string }> = {};
+    type Dot = { key: string; color: string };
+    const marks: Record<
+      string,
+      { dots?: Dot[]; selected?: boolean; selectedColor?: string }
+    > = {};
+    const addDot = (date: string, dot: Dot) => {
+      const cur = marks[date] ?? {};
+      const dots = cur.dots ?? [];
+      // dedupe by key
+      if (!dots.some((d) => d.key === dot.key)) dots.push(dot);
+      marks[date] = { ...cur, dots };
+    };
     if (blocks) {
       blocks.forEach((b) => {
-        const d = toDateStr(new Date(b.start_time));
-        marks[d] = { ...(marks[d] ?? {}), marked: true, dotColor: blockColor(b) };
+        addDot(toDateStr(new Date(b.start_time)), {
+          key: `block-${b.block_type}`,
+          color: blockColor(b),
+        });
       });
     }
-    marks[selectedDate] = { ...(marks[selectedDate] ?? {}), selected: true, selectedColor: Colors.primary };
+    if (openTasks) {
+      openTasks.forEach((t) => {
+        if (!t.due_date) return;
+        addDot(toDateStr(new Date(t.due_date)), {
+          key: `task-${t.source}`,
+          color: t.source === 'ics' ? Colors.primaryLight : Colors.accentOrange,
+        });
+      });
+    }
+    marks[selectedDate] = {
+      ...(marks[selectedDate] ?? {}),
+      selected: true,
+      selectedColor: Colors.primary,
+    };
     return marks;
-  }, [blocks, selectedDate]);
+  }, [blocks, openTasks, selectedDate]);
 
   const openCreate = useCallback(() => {
     setEditingBlock(null);
@@ -327,6 +369,7 @@ export default function ScheduleScreen() {
         <ExpandableCalendar
           initialPosition={ExpandableCalendar.positions.CLOSED}
           markedDates={markedDates}
+          markingType="multi-dot"
           theme={{
             backgroundColor: Colors.bg,
             calendarBackground: Colors.bg,
@@ -365,47 +408,97 @@ export default function ScheduleScreen() {
 
             {blocksLoading ? (
               <ActivityIndicator color={Colors.primary} style={{ paddingVertical: 30 }} />
-            ) : dayBlocks.length === 0 ? (
+            ) : dayBlocks.length === 0 && dayTasks.length === 0 ? (
               <View style={s.emptyWrap}>
                 <Ionicons name="calendar-outline" size={32} color={Colors.textMuted} />
-                <Text style={s.emptyTitle}>No blocks</Text>
+                <Text style={s.emptyTitle}>Nothing scheduled</Text>
                 <Text style={s.emptyBody}>
-                  Tap "Add block" to schedule study or class time.
+                  Tap "Add block" to schedule study or class time. Canvas
+                  assignments will appear on their due date.
                 </Text>
               </View>
             ) : (
-              dayBlocks.map((block) => {
-                const colors = blockTypeColors(block.block_type);
-                const isEditable = block.block_type !== 'class' && !offlineMode;
-                return (
-                  <TouchableOpacity
-                    key={block.id}
-                    style={s.blockCard}
-                    onPress={isEditable ? () => openEdit(block) : undefined}
-                    activeOpacity={isEditable ? 0.7 : 1}
-                  >
-                    <View style={[s.blockColorBar, { backgroundColor: blockColor(block) }]} />
-                    <View style={s.blockContent}>
-                      <Text style={s.blockTitle} numberOfLines={1}>
-                        {block.title}
-                      </Text>
-                      <Text style={s.blockTime}>
-                        {formatTimeRange(block.start_time, block.end_time)}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        s.blockTypeBadge,
-                        { backgroundColor: colors.bg, borderColor: colors.border },
-                      ]}
+              <>
+                {dayBlocks.map((block) => {
+                  const colors = blockTypeColors(block.block_type);
+                  const isEditable = block.block_type !== 'class' && !offlineMode;
+                  return (
+                    <TouchableOpacity
+                      key={block.id}
+                      style={s.blockCard}
+                      onPress={isEditable ? () => openEdit(block) : undefined}
+                      activeOpacity={isEditable ? 0.7 : 1}
                     >
-                      <Text style={[s.blockTypeBadgeText, { color: colors.text }]}>
-                        {block.block_type}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })
+                      <View
+                        style={[s.blockColorBar, { backgroundColor: blockColor(block) }]}
+                      />
+                      <View style={s.blockContent}>
+                        <Text style={s.blockTitle} numberOfLines={1}>
+                          {block.title}
+                        </Text>
+                        <Text style={s.blockTime}>
+                          {formatTimeRange(block.start_time, block.end_time)}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          s.blockTypeBadge,
+                          { backgroundColor: colors.bg, borderColor: colors.border },
+                        ]}
+                      >
+                        <Text style={[s.blockTypeBadgeText, { color: colors.text }]}>
+                          {block.block_type}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+                {dayTasks.length > 0 && (
+                  <Text style={[s.blocksSectionTitle, { marginTop: 8 }]}>
+                    Due {selectedDate === today ? 'today' : 'this day'}
+                  </Text>
+                )}
+                {dayTasks.map((task) => {
+                  const accent =
+                    task.source === 'ics' ? Colors.primaryLight : Colors.accentOrange;
+                  return (
+                    <TouchableOpacity
+                      key={task.id}
+                      style={s.blockCard}
+                      onPress={() => router.push(`/(tabs)/todo/${task.id}`)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[s.blockColorBar, { backgroundColor: accent }]} />
+                      <View style={s.blockContent}>
+                        <Text style={s.blockTitle} numberOfLines={1}>
+                          {task.title}
+                        </Text>
+                        <Text style={s.blockTime}>
+                          Due {formatTime(task.due_date as string)} · {task.source}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          s.blockTypeBadge,
+                          {
+                            backgroundColor: Colors.surface,
+                            borderColor: Colors.border,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            s.blockTypeBadgeText,
+                            { color: Colors.textSecondary },
+                          ]}
+                        >
+                          task
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </>
             )}
           </View>
         </ScrollView>
