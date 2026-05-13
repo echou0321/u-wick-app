@@ -3,7 +3,7 @@ import {
   View,
   Text,
   FlatList,
-  Switch,
+  ScrollView,
   Alert,
   ActivityIndicator,
   Modal,
@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Calendar } from 'react-native-calendars';
 import { useQueryClient } from '@tanstack/react-query';
 import { Colors } from '@/constants/colors';
 import { Fonts, FontSizes } from '@/constants/typography';
@@ -24,7 +25,6 @@ import { todoStyles as s } from '@/src/styles/todo';
 import TaskFilterBar, { TaskFilter } from '@/src/components/todo/TaskFilterBar';
 import TaskRow from '@/src/components/todo/TaskRow';
 import { useTasks, useUpdateTask, useDeleteTask, useCreateTask } from '@/src/hooks/useTasks';
-import { connectIcs } from '@/src/api/ics';
 import { logEvent } from '@/src/api/sessions';
 import { useAuthStore } from '@/src/stores/authStore';
 import type { Task } from '@/src/types/api';
@@ -36,6 +36,17 @@ const PRIORITY_OPTIONS = [
   { label: 'Medium', value: 1.5, color: '#F7A06A' },
   { label: 'High', value: 3.0, color: '#F76A6A' },
 ] as const;
+
+const TODAY = new Date().toISOString().split('T')[0];
+
+function formatPickedDate(dateStr: string): string {
+  return new Date(`${dateStr}T12:00:00`).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 function isThisWeek(dueDate: string | null): boolean {
   if (!dueDate) return false;
@@ -60,10 +71,10 @@ function isOverdue(task: Task): boolean {
   return !task.done && isPastDue(task);
 }
 
-function applyFilter(tasks: Task[], filter: TaskFilter, forDone = false): Task[] {
+function applyFilter(tasks: Task[], filter: TaskFilter): Task[] {
   if (filter === 'starred') return tasks.filter((t) => t.highlighted);
   if (filter === 'week') return tasks.filter((t) => isThisWeek(t.due_date));
-  if (filter === 'overdue') return tasks.filter(forDone ? isPastDue : isOverdue);
+  if (filter === 'overdue') return tasks.filter(isOverdue);
   return tasks;
 }
 
@@ -80,20 +91,13 @@ function sortTasks(tasks: Task[], order: SortOrder): Task[] {
 export default function TodoScreen() {
   const [filter, setFilter] = useState<TaskFilter>('all');
   const [sortOrder, setSortOrder] = useState<SortOrder>('due_date');
-  const [showCompleted, setShowCompleted] = useState(false);
   const [undoTask, setUndoTask] = useState<Task | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flatListRef = useRef<FlatList<Task>>(null);
 
   useEffect(() => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
-  }, [filter, showCompleted]);
-
-  // ICS import modal state
-  const [icsModalVisible, setIcsModalVisible] = useState(false);
-  const [icsUrl, setIcsUrl] = useState('');
-  const [icsUrlError, setIcsUrlError] = useState('');
-  const [connecting, setConnecting] = useState(false);
+  }, [filter]);
 
   // Add task form
   const [addTaskModalVisible, setAddTaskModalVisible] = useState(false);
@@ -101,6 +105,7 @@ export default function TodoScreen() {
   const [createDueDate, setCreateDueDate] = useState('');
   const [createWeight, setCreateWeight] = useState(1.5);
   const [createError, setCreateError] = useState('');
+  const [dateCalendarOpen, setDateCalendarOpen] = useState(false);
 
   const qc = useQueryClient();
   const clearAuth = useAuthStore((s) => s.clearAuth);
@@ -111,11 +116,10 @@ export default function TodoScreen() {
   const { mutate: deleteTask } = useDeleteTask();
   const { mutate: createTask, isPending: isCreating } = useCreateTask();
 
-  const filtered = applyFilter(activeTasks ?? [], filter);
-  const sorted = sortTasks(filtered, sortOrder);
-  const filteredDone = applyFilter(doneTasks ?? [], filter, true);
-  const sortedDone = sortTasks(filteredDone, sortOrder);
-  const listData: Task[] = showCompleted ? [...sorted, ...sortedDone] : sorted;
+  const listData: Task[] =
+    filter === 'completed'
+      ? sortTasks(doneTasks ?? [], sortOrder)
+      : sortTasks(applyFilter(activeTasks ?? [], filter), sortOrder);
 
   const overdueList = applyFilter(activeTasks ?? [], 'overdue');
 
@@ -131,6 +135,7 @@ export default function TodoScreen() {
     setCreateDueDate('');
     setCreateWeight(1.5);
     setCreateError('');
+    setDateCalendarOpen(false);
     setAddTaskModalVisible(true);
   }
 
@@ -140,17 +145,9 @@ export default function TodoScreen() {
       setCreateError('Please enter a title');
       return;
     }
-    let due: string | null = null;
-    if (createDueDate.trim()) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(createDueDate.trim())) {
-        setCreateError('Use YYYY-MM-DD format (e.g. 2026-05-15)');
-        return;
-      }
-      due = createDueDate.trim();
-    }
     setCreateError('');
     createTask(
-      { title: trimmed, due_date: due, weight: createWeight },
+      { title: trimmed, due_date: createDueDate || null, weight: createWeight },
       {
         onSuccess: () => setAddTaskModalVisible(false),
         onError: () => setCreateError('Failed to create task. Try again.'),
@@ -192,37 +189,6 @@ export default function TodoScreen() {
     );
   }
 
-  async function handleConnectIcs() {
-    const trimmed = icsUrl.trim();
-    if (!trimmed) {
-      setIcsUrlError('Please enter your Canvas ICS URL');
-      return;
-    }
-    if (!trimmed.startsWith('https://')) {
-      setIcsUrlError('URL must start with https://');
-      return;
-    }
-    setIcsUrlError('');
-    setConnecting(true);
-    try {
-      const result = await connectIcs(trimmed);
-      setIcsModalVisible(false);
-      setIcsUrl('');
-      Alert.alert('Canvas connected!', `${result.tasks_imported} tasks synced from Canvas.`);
-      qc.invalidateQueries({ queryKey: ['tasks'] });
-    } catch {
-      setIcsUrlError('Could not connect. Double-check your URL and try again.');
-    } finally {
-      setConnecting(false);
-    }
-  }
-
-  function openIcsModal() {
-    setIcsUrl('');
-    setIcsUrlError('');
-    setIcsModalVisible(true);
-  }
-
   function handleDevSignOut() {
     Alert.alert('Dev: Sign out', 'Clear auth and return to login?', [
       { text: 'Cancel', style: 'cancel' },
@@ -260,9 +226,10 @@ export default function TodoScreen() {
   const handleDelete = useCallback(
     (task: Task) => {
       if (task.source !== 'manual') {
-        const msg = task.source === 'ics'
-          ? 'Canvas tasks will reappear on the next sync unless removed in Canvas itself.'
-          : 'Auto-generated tasks can only be removed from your active list, not permanently deleted.';
+        const msg =
+          task.source === 'ics'
+            ? 'Canvas tasks will reappear on the next sync unless removed in Canvas itself.'
+            : 'Auto-generated tasks can only be removed from your active list, not permanently deleted.';
         Alert.alert('Remove from list?', msg, [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -288,10 +255,11 @@ export default function TodoScreen() {
   function renderEmpty() {
     if (isLoading) return null;
     const messages: Record<TaskFilter, { title: string; body: string }> = {
-      all: { title: 'No tasks yet', body: 'Connect Canvas to pull in your assignments.' },
+      all: { title: 'No tasks yet', body: 'Tap "Add task" to get started, or connect Canvas in Profile.' },
       week: { title: 'Nothing due this week', body: 'Enjoy the breather.' },
       overdue: { title: 'No overdue tasks', body: "You're all caught up." },
       starred: { title: 'No starred tasks', body: 'Tap the star on a task to highlight it.' },
+      completed: { title: 'No completed tasks', body: 'Tasks you finish will appear here.' },
     };
     const { title, body } = messages[filter];
     return (
@@ -299,30 +267,22 @@ export default function TodoScreen() {
         <Ionicons name="checkmark-circle-outline" size={48} color={Colors.textMuted} />
         <Text style={s.emptyTitle}>{title}</Text>
         <Text style={s.emptyBody}>{body}</Text>
-        {filter === 'all' && (
-          <TouchableOpacity style={m.connectCta} onPress={openIcsModal} activeOpacity={0.8}>
-            <Ionicons name="cloud-download-outline" size={16} color={Colors.white} />
-            <Text style={m.connectCtaText}>Connect Canvas</Text>
-          </TouchableOpacity>
-        )}
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={ts.safe}>
+    <SafeAreaView style={ts.safe} edges={['top']}>
       {/* Header */}
       <View style={[ts.header, ts.headerRow]}>
         <Text style={ts.title}>TODO</Text>
         <View style={m.headerActions}>
-          <TouchableOpacity onPress={handleOpenAddTask} hitSlop={8}>
-            <Ionicons name="add-circle-outline" size={22} color={Colors.textSecondary} />
-          </TouchableOpacity>
           <TouchableOpacity onPress={handleSortPress} hitSlop={8}>
             <Ionicons name="swap-vertical-outline" size={22} color={Colors.textSecondary} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={openIcsModal} hitSlop={8}>
-            <Ionicons name="cloud-download-outline" size={22} color={Colors.textSecondary} />
+          <TouchableOpacity onPress={handleOpenAddTask} style={m.addBtn} activeOpacity={0.8}>
+            <Ionicons name="add" size={18} color={Colors.white} />
+            <Text style={m.addBtnText}>Add task</Text>
           </TouchableOpacity>
           {/* Dev-only sign out — remove before production */}
           {__DEV__ && (
@@ -342,17 +302,6 @@ export default function TodoScreen() {
           <Text style={s.markAllBtnText}>Mark all {overdueList.length} as done</Text>
         </TouchableOpacity>
       )}
-
-      {/* Show completed — fixed above the list so it's always reachable */}
-      <View style={s.completedRow}>
-        <Text style={s.completedRowText}>Show completed</Text>
-        <Switch
-          value={showCompleted}
-          onValueChange={setShowCompleted}
-          trackColor={{ true: Colors.primary, false: Colors.border }}
-          thumbColor={Colors.white}
-        />
-      </View>
 
       {isLoading ? (
         <View style={ts.centered}>
@@ -389,57 +338,6 @@ export default function TodoScreen() {
         </View>
       )}
 
-      {/* ICS import modal */}
-      <Modal
-        visible={icsModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIcsModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <TouchableOpacity
-            style={m.modalBackdrop}
-            activeOpacity={1}
-            onPress={() => setIcsModalVisible(false)}
-          >
-            <TouchableOpacity style={m.modalCard} activeOpacity={1}>
-              <Text style={m.modalTitle}>Connect Canvas</Text>
-              <Text style={m.modalBody}>
-                Paste your Canvas ICS URL — find it under Calendar → Calendar Feed in Canvas.
-              </Text>
-              <TextInput
-                style={[m.input, icsUrlError ? m.inputError : undefined]}
-                placeholder="https://canvas.uw.edu/feeds/calendars/..."
-                placeholderTextColor={Colors.textMuted}
-                value={icsUrl}
-                onChangeText={(t) => { setIcsUrl(t); setIcsUrlError(''); }}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-              />
-              {icsUrlError ? <Text style={m.errorText}>{icsUrlError}</Text> : null}
-              <TouchableOpacity
-                style={[m.connectBtn, connecting && { opacity: 0.6 }]}
-                onPress={handleConnectIcs}
-                disabled={connecting}
-                activeOpacity={0.8}
-              >
-                {connecting
-                  ? <ActivityIndicator color={Colors.white} size="small" />
-                  : <Text style={m.connectBtnText}>Connect</Text>
-                }
-              </TouchableOpacity>
-              <TouchableOpacity style={m.cancelBtn} onPress={() => setIcsModalVisible(false)}>
-                <Text style={m.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </KeyboardAvoidingView>
-      </Modal>
-
       {/* Add task modal */}
       <Modal
         visible={addTaskModalVisible}
@@ -457,65 +355,112 @@ export default function TodoScreen() {
             onPress={() => setAddTaskModalVisible(false)}
           >
             <TouchableOpacity style={m.modalCard} activeOpacity={1}>
-              <Text style={m.modalTitle}>Add task</Text>
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <Text style={m.modalTitle}>Add task</Text>
 
-              <Text style={m.formLabel}>Title</Text>
-              <TextInput
-                style={m.input}
-                placeholder="e.g. Play Stardew Valley, read chapter 4…"
-                placeholderTextColor={Colors.textMuted}
-                value={createTitle}
-                onChangeText={(t) => { setCreateTitle(t); setCreateError(''); }}
-              />
+                <Text style={m.formLabel}>Title</Text>
+                <TextInput
+                  style={m.input}
+                  placeholder="e.g. Play Stardew Valley, read chapter 4…"
+                  placeholderTextColor={Colors.textMuted}
+                  value={createTitle}
+                  onChangeText={(t) => { setCreateTitle(t); setCreateError(''); }}
+                />
 
-              <Text style={m.formLabel}>Due date (optional)</Text>
-              <TextInput
-                style={m.input}
-                placeholder="2026-05-15"
-                placeholderTextColor={Colors.textMuted}
-                value={createDueDate}
-                onChangeText={(t) => { setCreateDueDate(t); setCreateError(''); }}
-                keyboardType="numbers-and-punctuation"
-              />
+                <Text style={m.formLabel}>Due date (optional)</Text>
+                <TouchableOpacity
+                  style={m.dateField}
+                  onPress={() => setDateCalendarOpen((v) => !v)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={createDueDate ? m.dateFieldText : m.dateFieldPlaceholder}>
+                    {createDueDate ? formatPickedDate(createDueDate) : 'Select a date'}
+                  </Text>
+                  <Ionicons
+                    name={dateCalendarOpen ? 'chevron-up' : 'calendar-outline'}
+                    size={16}
+                    color={Colors.textMuted}
+                  />
+                </TouchableOpacity>
+                {dateCalendarOpen && (
+                  <View style={m.inlineCalendar}>
+                    <Calendar
+                      onDayPress={(day) => {
+                        setCreateDueDate(day.dateString);
+                        setDateCalendarOpen(false);
+                      }}
+                      markedDates={
+                        createDueDate
+                          ? { [createDueDate]: { selected: true, selectedColor: Colors.primary } }
+                          : {}
+                      }
+                      minDate={TODAY}
+                      theme={{
+                        backgroundColor: Colors.surface,
+                        calendarBackground: Colors.surface,
+                        textSectionTitleColor: Colors.textMuted,
+                        selectedDayBackgroundColor: Colors.primary,
+                        selectedDayTextColor: Colors.white,
+                        todayTextColor: Colors.primaryLight,
+                        dayTextColor: Colors.textPrimary,
+                        textDisabledColor: Colors.textMuted,
+                        arrowColor: Colors.primary,
+                        monthTextColor: Colors.textPrimary,
+                        textDayFontFamily: Fonts.body,
+                        textMonthFontFamily: Fonts.heading,
+                        textDayHeaderFontFamily: Fonts.bodyMedium,
+                      }}
+                    />
+                    {createDueDate ? (
+                      <TouchableOpacity
+                        style={m.calendarClearBtn}
+                        onPress={() => { setCreateDueDate(''); setDateCalendarOpen(false); }}
+                      >
+                        <Text style={m.calendarClearText}>Clear date</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                )}
 
-              <Text style={m.formLabel}>Priority</Text>
-              <View style={m.weightRow}>
-                {PRIORITY_OPTIONS.map((opt) => {
-                  const active = createWeight === opt.value;
-                  return (
-                    <TouchableOpacity
-                      key={opt.label}
-                      style={[
-                        m.weightPill,
-                        active && { backgroundColor: opt.color + '28', borderColor: opt.color },
-                      ]}
-                      onPress={() => setCreateWeight(opt.value)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[m.weightPillText, active && { color: opt.color }]}>
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                <Text style={m.formLabel}>Priority</Text>
+                <View style={m.weightRow}>
+                  {PRIORITY_OPTIONS.map((opt) => {
+                    const active = createWeight === opt.value;
+                    return (
+                      <TouchableOpacity
+                        key={opt.label}
+                        style={[
+                          m.weightPill,
+                          active && { backgroundColor: opt.color + '28', borderColor: opt.color },
+                        ]}
+                        onPress={() => setCreateWeight(opt.value)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[m.weightPillText, active && { color: opt.color }]}>
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
 
-              {createError ? <Text style={m.errorText}>{createError}</Text> : null}
+                {createError ? <Text style={m.errorText}>{createError}</Text> : null}
 
-              <TouchableOpacity
-                style={[m.connectBtn, isCreating && { opacity: 0.6 }]}
-                onPress={handleCreateTask}
-                disabled={isCreating}
-                activeOpacity={0.8}
-              >
-                {isCreating
-                  ? <ActivityIndicator color={Colors.white} size="small" />
-                  : <Text style={m.connectBtnText}>Add task</Text>
-                }
-              </TouchableOpacity>
-              <TouchableOpacity style={m.cancelBtn} onPress={() => setAddTaskModalVisible(false)}>
-                <Text style={m.cancelText}>Cancel</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[m.primaryBtn, isCreating && { opacity: 0.6 }]}
+                  onPress={handleCreateTask}
+                  disabled={isCreating}
+                  activeOpacity={0.8}
+                >
+                  {isCreating
+                    ? <ActivityIndicator color={Colors.white} size="small" />
+                    : <Text style={m.primaryBtnText}>Add task</Text>
+                  }
+                </TouchableOpacity>
+                <TouchableOpacity style={m.cancelBtn} onPress={() => setAddTaskModalVisible(false)}>
+                  <Text style={m.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </ScrollView>
             </TouchableOpacity>
           </TouchableOpacity>
         </KeyboardAvoidingView>
@@ -527,22 +472,21 @@ export default function TodoScreen() {
 const m = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 12,
     alignItems: 'center',
   },
-  connectCta: {
+  addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 20,
+    gap: 5,
     backgroundColor: Colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
   },
-  connectCtaText: {
+  addBtnText: {
     fontFamily: Fonts.bodyMedium,
-    fontSize: FontSizes.base,
+    fontSize: FontSizes.sm,
     color: Colors.white,
   },
   modalBackdrop: {
@@ -558,19 +502,13 @@ const m = StyleSheet.create({
     borderTopColor: Colors.border,
     padding: 24,
     paddingBottom: 44,
+    maxHeight: '90%',
   },
   modalTitle: {
     fontFamily: Fonts.heading,
     fontSize: FontSizes.lg,
     color: Colors.textPrimary,
     marginBottom: 6,
-  },
-  modalBody: {
-    fontFamily: Fonts.body,
-    fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-    marginBottom: 16,
-    lineHeight: FontSizes.sm * 1.55,
   },
   input: {
     backgroundColor: Colors.surface,
@@ -583,8 +521,27 @@ const m = StyleSheet.create({
     fontSize: FontSizes.base,
     marginBottom: 4,
   },
-  inputError: {
-    borderColor: '#F76A6A',
+  dateField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 4,
+  },
+  dateFieldText: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+  },
+  dateFieldPlaceholder: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textMuted,
   },
   errorText: {
     color: '#F76A6A',
@@ -592,14 +549,14 @@ const m = StyleSheet.create({
     fontSize: FontSizes.sm,
     marginBottom: 8,
   },
-  connectBtn: {
+  primaryBtn: {
     backgroundColor: Colors.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 12,
   },
-  connectBtnText: {
+  primaryBtnText: {
     fontFamily: Fonts.bodyMedium,
     fontSize: FontSizes.base,
     color: Colors.white,
@@ -637,16 +594,29 @@ const m = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  weightPillActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
   weightPillText: {
     fontFamily: Fonts.bodyMedium,
     fontSize: FontSizes.sm,
     color: Colors.textSecondary,
   },
-  weightPillTextActive: {
-    color: Colors.white,
+  inlineCalendar: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  calendarClearBtn: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  calendarClearText: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: '#F76A6A',
   },
 });

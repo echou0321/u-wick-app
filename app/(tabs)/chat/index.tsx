@@ -149,7 +149,7 @@ export default function ChatScreen() {
   const activeTab = visibleTabs.find((t) => t.flow === activeFlow) ?? visibleTabs[0];
 
   return (
-    <SafeAreaView style={tabScreenStyles.safe}>
+    <SafeAreaView style={tabScreenStyles.safe} edges={['top']}>
       {isOffline && (
         <View style={styles.offlineBanner}>
           <Text style={styles.offlineText}>You're offline — chat is unavailable</Text>

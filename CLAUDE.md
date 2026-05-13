@@ -111,15 +111,18 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `app/(auth)/login.tsx` — email + password form; inline field validation; 401 error message; navigates to `/(tabs)/chat` or `/(onboarding)/profile` based on `onboarding_complete`
 - `app/(auth)/register.tsx` — display_name + email + password + confirm; length + match validation; 409 error message; navigates to `/(onboarding)/profile` on success
 - `app/(onboarding)/_layout.tsx` — onboarding group Stack, slide animation
-- `app/(onboarding)/profile.tsx` — current_quarter + enrollment_status segmented control + optional major; `PATCH /users/me`; navigates to `/notifications`
+- `app/(onboarding)/profile.tsx` — current_quarter + enrollment_status segmented control; branched major field: **in-major** → free-text input (saved to `PATCH /users/me`); **pre-major** → slide-up major picker modal (same data source as major-goals screen) → saves name to `PATCH /users/me` AND calls `POST /goals/major` to create the goal (error swallowed if duplicate); `SafeAreaView` uses `edges={['top']}` to prevent double bottom inset
 - `app/(onboarding)/notifications.tsx` — 3 feature rows; "Enable Notifications" requests OS permission + Expo push token + `PATCH /users/me/push-token`; "Skip for now" path; both paths call `POST /users/me/onboarding/complete` + `uiStore.resetWizard()` (ensures fresh accounts always see the wizard regardless of prior device history) + fire-and-forget `POST /sessions/start` → `/(tabs)/chat`
 - `app/(tabs)/_layout.tsx` — 4 tabs: Chat / TODO / Schedule / Profile; Ionicons; wraps Tabs in View + mounts `<CoachMarkWizard />` as absolute overlay
+- `app/(tabs)/chat/_layout.tsx` — Stack navigator (`headerShown: false`) for the Chat tab; required for Expo Router to surface `tabBarIcon` for the chat segment
 - `app/(tabs)/todo/_layout.tsx` — Stack navigator (`headerShown: false`) for the TODO tab; required so `todo/[id]` can push/pop correctly via `router.back()`
-- `app/(tabs)/chat/index.tsx` — **in progress (chat_branch)**: per-flow message history (loads from React Query, lives in local state during session), SSE streaming via XHR + `onprogress` (token → streaming bubble → finalized message), clear-conversation Alert (`DELETE /chat/history?flow=`), offline banner; **flow tab strip** (Chat/Planning/Quarter plan/Advising) replaces FlowPill — each tab is its own conversation thread, Advising hidden for in-major users; context-sensitive `ShortcutBar` per active flow; assistant bubbles render markdown + are text-selectable; **known gaps / needs testing**: scroll-to-bottom edge cases, session start before first message, WizardStep2 "coming soon" copy not yet removed
-- `app/(tabs)/todo/index.tsx` — **built**: task list with All/This Week/Overdue/Starred filter bar, pull-to-refresh (invalidates all `['tasks']` keys), bidirectional done toggle (checkbox on each row + undo toast), sort by due date or priority (header icon), mark-all-overdue-done bulk action, swipe-to-delete (hard delete for manual/ai/syllabus; soft delete for ICS), show-completed toggle (fixed row above list, scoped to active filter), ICS import modal (cloud icon in header + CTA in empty state), add-task form (title + optional YYYY-MM-DD due date + **priority pills: Low/Medium/High** with colors; default Medium; generic placeholder accepts any task type), `__DEV__`-only sign-out icon in header; scroll resets to top on filter or completed-toggle change; `isThisWeek` is today→+7 days only (past-due tasks excluded)
+- `app/(tabs)/schedule/_layout.tsx` — Stack navigator (`headerShown: false`) for the Schedule tab; required for Expo Router to surface `tabBarIcon` for the schedule segment
+- `app/(tabs)/chat/index.tsx` — per-flow message history (loads from React Query, lives in local state during session), SSE streaming via XHR + `onprogress` (token → streaming bubble → finalized message), clear-conversation Alert (`DELETE /chat/history?flow=`), offline banner; **flow tab strip** (Chat/Planning/Quarter plan/Advising) replaces FlowPill — each tab is its own conversation thread, Advising hidden for in-major users; context-sensitive `ShortcutBar` per active flow; assistant bubbles render markdown + are text-selectable; `SafeAreaView edges={['top']}` — prevents double bottom inset on tab switch
+- `app/(tabs)/todo/index.tsx` — task list with scrollable filter bar (All / This Week / Overdue / Starred / **Completed** — Completed tab replaces the old show-completed toggle), pull-to-refresh, bidirectional done toggle (checkbox + undo toast), sort by due date or priority (header icon), mark-all-overdue-done bulk action, swipe-to-delete (hard delete for manual; soft delete for ICS/ai/syllabus), prominent **"Add task" pill button** in header, add-task form with title + inline calendar date picker + priority pills; `__DEV__`-only sign-out icon; scroll resets to top on filter change; `isThisWeek` is today→+7 days only; `SafeAreaView edges={['top']}` — prevents last-item flicker on tab switch
 - `app/(tabs)/todo/[id].tsx` — **built**: task detail; done toggle, due date, priority label, tag row (shown when `task.tag` non-null), source badge, active "Break this down" button (loading spinner while pending), subtask section (renders `SubtaskRow` list on breakdown success), delete/remove action
 - `app/(tabs)/schedule/index.tsx` — skeleton
 - `app/(tabs)/profile/index.tsx` — skeleton
+- `src/api/syllabus.ts` — `extractSyllabus(course_id | null, quarter, text)` → `POST /syllabus`; `confirmSyllabus(jobId, tasks[])` → `POST /syllabus/confirm/:jobId`; `ExtractedTask` interface `{ title, due_date, weight }`; **blocked on backend `GET /courses` — see Syllabus section below**
 - `src/api/chat.ts` — `getChatHistory(flow)`, `deleteChatHistory(flow)`
 - `src/api/auth.ts` — `login()`, `register()`
 - `src/api/users.ts` — `getMe()`, `updateMe()`, `completeOnboarding()`, `updatePushToken()`
@@ -135,14 +138,14 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `src/styles/chat.ts` — `bubbleStyles`, `inputStyles`, `typingStyles`, `flowPillStyles`, `shortcutBarStyles`, `chatScreenStyles`, `markdownStyles`, `flowTabStyles`: chat components; `flowTabStyles` drives the flow tab strip (row, tab, dot, label, labelActive, clearBtn)
 - `src/styles/tabs.ts` — `tabScreenStyles`, `tabBarStyles`: tab screens + tab bar
 - `src/styles/wizard.ts` — `wizardStyles`: overlay, spotlight, slide-up card, feature rows
-- `src/styles/todo.ts` — `todoStyles`: filter bar, task row (incl. `checkBox`), swipe action, empty state, `markAllBtn`, `sortRow`, `undoToast`, detail screen
+- `src/styles/todo.ts` — `todoStyles`: `filterBarOuter` (fixed-height 52 View wrapper for the horizontal ScrollView — prevents flex-stretch bug), `filterBar` (contentContainerStyle row), task row (incl. `checkBox`), swipe action, empty state, `markAllBtn`, `sortRow`, `undoToast`, detail screen; `completedRow`/`completedRowText` removed (replaced by Completed filter tab)
 - `src/components/ui/Card.tsx`, `Badge.tsx` — generic, pull styles from `components.ts`
 - `src/components/chat/ChatBubble.tsx` — assistant bubbles render via `react-native-markdown-display` (bold, lists, code, headings) with `paragraph` rule overridden to `<Text selectable>` — enables long-press text selection on AI responses; user bubbles use plain `Text` (selectable); styles via `markdownStyles` in `chat.ts`
-- `src/components/chat/ChatInput.tsx` — `onSend` + `disabled` + `prefill` + `inputRef` props; `prefill` sets value via `useEffect` only when it changes to a new non-empty string; pull styles from `chat.ts`
+- `src/components/chat/ChatInput.tsx` — `onSend` + `disabled` + `prefill` + `inputRef` props; `prefill` sets value via `useEffect` only when it changes to a new non-empty string; `multiline` enabled — input expands vertically up to `maxHeight: 120`; send button uses `alignItems: 'flex-end'` so it anchors to the bottom of a tall input; pull styles from `chat.ts`
 - `src/components/chat/TypingIndicator.tsx` — staggered dot animation; pull styles from `chat.ts`
 - `src/components/chat/FlowPill.tsx` — colored dot + human-readable flow label badge; label/color maps for all 5 `FlowMode` values; no longer used in main chat screen (replaced by `flowTabStyles` tab strip) but kept for potential future use
 - `src/components/chat/ShortcutBar.tsx` — context-sensitive quick-prompt pills per active flow; `FLOW_PROMPTS` map defines 1–2 prompts per flow mode; renders `null` for `proactive` flow; props: `activeFlow` + `onPrefill(text)`
-- `src/components/todo/TaskFilterBar.tsx` — All / This Week / Overdue / Starred pill filter; `TaskFilter` type exported
+- `src/components/todo/TaskFilterBar.tsx` — All / This Week / Overdue / Starred / Completed scrollable pill filter; outer `View` with `filterBarOuter` (height: 52) wraps a horizontal `ScrollView` with `contentContainerStyle={filterBar}`; `TaskFilter` type exported
 - `src/components/todo/TaskRow.tsx` — swipeable row; circular done checkbox (bidirectional), title, due date (relative + urgent colour — "Overdue" label suppressed for done tasks, shows plain date instead), **priority badge** (High/Medium/Low with red/orange/teal colors via `priorityLabel`/`priorityColor`), **tag badge** (gray pill, shown when `task.tag` non-null), star toggle; swipe-left = delete action
 - `src/components/todo/SubtaskRow.tsx` — read-only subtask row; checkmark/ellipse icon reflects `done` state; shows `suggested_start` hint if present
 - `src/types/api.ts` — all API interfaces (`User`, `Course`, `Task`, `TaskSubtask`, `ScheduleBlock`, `HeatEntry`, `Major`, `MajorGoal`, `ChatMessage`, `SyllabusMeta`, `IcsStatus`) + type aliases (`FlowMode`, `EnrollmentStatus`, etc.); `Task` now includes `tag: string | null`
@@ -154,6 +157,8 @@ Every screen and hook gets a test file immediately after it is built. Structure:
 - `src/hooks/useChatHistory.ts` — `useChatHistory(flow)` (staleTime 0, always fresh on mount); `useClearChatHistory()` mutation (DELETE + invalidate)
 - `src/hooks/useChatStream.ts` — SSE via XHR + `onprogress`; handles `token` / `side_effects` / `done` events; invalidates React Query keys per side-effect type; fire-and-forget `logEvent('chat_turn')`; graceful fallback if stream closes without `done`
 - `src/wizard/WizardStep3.tsx` — feature discovery; dimmed overlay + tall card with 3 icon/title/body rows; "Let's go" → `completeWizard()` (writes `wizardCompleted: true` to AsyncStorage)
+- `app/(tabs)/profile/syllabus-upload.tsx` — two-state screen (paste → review); paste state: course name/quarter fields + large text area + sticky "Save syllabus" footer button; on save: `POST /syllabus` → if `tasks.length === 0` auto-confirms and shows success; if tasks found transitions to review state; review state: editable task cards (title, due date, priority badge, remove button) + "Add X assignments to TODO" primary + "Save syllabus without adding tasks" secondary; both confirm paths call `POST /syllabus/confirm/:jobId` and invalidate `['tasks']`; **currently blocked: `POST /syllabus` requires a valid UUID for `course_id` but frontend has no `GET /courses` endpoint to fetch one — see Syllabus section below**
+- `app/(tabs)/profile/courses.tsx` — lists courses derived from task `course_id` groupings; "Upload Syllabus" navigates to `syllabus-upload?courseId=<uuid>` (passes real UUID when available, or 'Unassigned' which resolves to `null` on the upload screen); `SafeAreaView` updated to `react-native-safe-area-context`
 
 ---
 
@@ -208,9 +213,18 @@ Cross-tab audit completed 2026-05-08. All 4 main tabs and all profile sub-screen
 - **Profile / Major Goals**: goal detail screen still under active debugging — checklist rendering, goal creation flow, and `GET /majors/:id` call all need end-to-end verification
 - **Schedule**: not yet tested on device; block CRUD and heat map toggle untested
 
+### Additional Bug Fixes — 2026-05-11
+
+**UI / Layout**
+- `app/(tabs)/chat/_layout.tsx` + `app/(tabs)/schedule/_layout.tsx` — created Stack layouts for chat and schedule tab folders; without them Expo Router cannot surface `tabBarIcon` for these segments (chat and schedule icons were missing from tab bar)
+- `app/(tabs)/chat/index.tsx` + `app/(tabs)/todo/index.tsx` — `SafeAreaView` changed to `edges={['top']}`; tab bar already owns the bottom safe area, double-applying it caused last-item flicker in TODO and input position stutter in Chat on every tab switch
+- `src/components/chat/ChatInput.tsx` — `multiline={false}` → `multiline`; input now expands vertically; `inputStyles.row` changed to `alignItems: 'flex-end'` so send button anchors to bottom of tall input; `maxHeight: 120` added to cap growth
+
+**Onboarding**
+- `app/(onboarding)/profile.tsx` — enrollment-status-branched major field: in-major → free-text input; pre-major → major picker modal (same list as major-goals) that also calls `POST /goals/major` on continue
+
 ### Deferred — out of scope until bugs resolved
 
-- Syllabus text-paste flow (`profile/syllabus-upload.tsx`)
 - Dashboard / chat empty state
 - Push notification deep links — requires EAS Build
 
@@ -241,8 +255,19 @@ All flow tabs built (Chat / Planning / Quarter plan / Advising), SSE streaming, 
 ### 6. Push notification deep links
 EAS Build needed for physical device push. Build receive + deep-link handlers in `app/_layout.tsx`: extract `taskId`/`goalId` from notification data, route to `todo/[id]` or `profile/major-goals/[id]`, log `notif_tapped` session event.
 
-### 7. Syllabus — text-paste flow
-**Approach changed from PDF upload to text-paste.** New flow: `POST /syllabus` with `{ course_id, quarter, text }` → synchronous response `{ jobId, tasks }` → review/edit screen → `POST /syllabus/confirm/:jobId`. No file picker, no polling loop. Build under `profile/syllabus-upload.tsx`.
+### 7. 🚧 Syllabus — frontend built, blocked on backend `GET /courses`
+
+Frontend (`profile/syllabus-upload.tsx`, `src/api/syllabus.ts`) is complete. The screen pastes syllabus text, calls `POST /syllabus`, shows an assignment review/confirm flow if due dates are found, and calls `POST /syllabus/confirm/:jobId` to persist.
+
+**Blocker:** `POST /syllabus` requires `course_id` as a valid UUID FK to the courses table. The frontend has no way to obtain course UUIDs — `GET /courses` does not exist, and ICS-imported tasks arrive with `course_id: null`. Passing a plain string (e.g. "CSE 123") fails with `Invalid input syntax for type uuid`; passing `null` fails with `course_id is required`.
+
+**Agreed backend fix — Option A: add `GET /courses`**
+Expose the courses table so the frontend can present a real course picker (like the major selector in onboarding) using actual UUIDs. Once this endpoint exists:
+1. Add `src/api/courses.ts` — `getCourses()` → `GET /courses`
+2. Add `src/hooks/useCourses.ts` — React Query wrapper, staleTime 5 min
+3. Replace the static courseId query param in `syllabus-upload.tsx` with a live picker that shows course names + sends the UUID
+
+This also fixes `profile/courses.tsx` — it currently groups tasks by raw UUID (or shows "Unassigned") because there is no course name to display.
 
 ### 8. ⏳ Dashboard / chat empty state — deferred
 **Do not start until the chat tab is stable and merged.** When the chat FlatList is empty (no history for the active flow), render a compact dashboard summary instead of a blank screen using `GET /users/me/dashboard` → `{ tasks_due_soon, schedule_today, nudges, heat_this_week }`. Once the user sends a message the cards scroll away and never reappear. No new tab needed — this is an empty-state enhancement to the existing Chat tab. Requires a `useDashboard` hook + a lightweight summary card component.

@@ -39,7 +39,7 @@ export function ChatInput({ onSend, disabled = false, prefill, inputRef }: ChatI
         onChangeText={setValue}
         onSubmitEditing={handleSend}
         returnKeyType="send"
-        multiline={false}
+        multiline
         editable={!disabled}
       />
       <TouchableOpacity
