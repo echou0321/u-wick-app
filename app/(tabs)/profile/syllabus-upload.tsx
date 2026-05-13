@@ -10,13 +10,18 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
+  Modal,
+  FlatList,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '@/src/hooks/useUser';
+import { useCourses } from '@/src/hooks/useCourses';
 import { extractSyllabus, confirmSyllabus, type ExtractedTask } from '@/src/api/syllabus';
+import type { Course } from '@/src/types/api';
 import { Colors } from '@/constants/colors';
 import { Fonts, FontSizes } from '@/constants/typography';
 import { tabScreenStyles as ts } from '@/src/styles/tabs';
@@ -28,13 +33,30 @@ function priorityInfo(weight: number): { label: string; color: string } {
 }
 
 export default function SyllabusUploadScreen() {
-  const { courseId } = useLocalSearchParams<{ courseId: string }>();
+  const { courseId, courseName } = useLocalSearchParams<{ courseId: string; courseName?: string }>();
   const { data: user } = useUser();
+  const { data: courses = [] } = useCourses();
   const qc = useQueryClient();
 
-  const resolvedCourseId = (!courseId || courseId === 'Unassigned') ? null : courseId;
+  const paramCourseId = (!courseId || courseId === 'Unassigned') ? null : courseId;
 
   const [step, setStep] = useState<'paste' | 'review'>('paste');
+  // Initialize immediately from URL params so the picker shows a pre-selection even
+  // before (or if) GET /courses resolves — upgraded to the real Course object once loaded.
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(() => {
+    if (!paramCourseId) return null;
+    return {
+      id: paramCourseId,
+      user_id: '',
+      name: courseName || 'Selected Course',
+      code: null,
+      quarter: null,
+      color: null,
+      source: 'ics',
+      created_at: '',
+    };
+  });
+  const [pickerVisible, setPickerVisible] = useState(false);
   const [quarter, setQuarter] = useState('');
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
@@ -51,8 +73,22 @@ export default function SyllabusUploadScreen() {
     }
   }, [user?.current_quarter]);
 
+  // Upgrade pseudo-course to the real API object once courses load
+  useEffect(() => {
+    if (!paramCourseId || courses.length === 0) return;
+    const match = courses.find((c) => c.id === paramCourseId);
+    if (match) setSelectedCourse(match);
+  }, [paramCourseId, courses]);
+
+  // When GET /courses is empty, fall back to showing just the pre-selected course in the picker
+  const pickerCourses = courses.length > 0 ? courses : (selectedCourse ? [selectedCourse] : []);
+
   async function handleSave() {
     const trimmedText = text.trim();
+    if (!selectedCourse) {
+      setSaveError('Please select a course first.');
+      return;
+    }
     if (!trimmedText) {
       setSaveError('Please paste your syllabus text first.');
       return;
@@ -61,7 +97,7 @@ export default function SyllabusUploadScreen() {
     setSaving(true);
     try {
       const res = await extractSyllabus(
-        resolvedCourseId,
+        selectedCourse.id,
         quarter.trim() || user?.current_quarter || '',
         trimmedText,
       );
@@ -212,10 +248,60 @@ export default function SyllabusUploadScreen() {
           <Text style={ts.title}>Upload Syllabus</Text>
           <View style={{ width: 48 }} />
         </View>
-        {resolvedCourseId ? (
-          <Text style={[ts.subtitle, { marginTop: 4 }]}>{resolvedCourseId}</Text>
-        ) : null}
       </View>
+
+      <Modal
+        visible={pickerVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPickerVisible(false)}
+      >
+        <Pressable style={m.modalBackdrop} onPress={() => setPickerVisible(false)}>
+          <Pressable style={m.modalSheet} onPress={() => {}}>
+            <View style={m.modalHeader}>
+              <Text style={m.modalTitle}>Select a course</Text>
+              <TouchableOpacity onPress={() => setPickerVisible(false)}>
+                <Ionicons name="close" size={22} color={Colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={pickerCourses}
+              keyExtractor={(c) => c.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    m.courseRow,
+                    selectedCourse?.id === item.id && m.courseRowSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedCourse(item);
+                    setPickerVisible(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  {item.color ? (
+                    <View style={[m.courseDot, { backgroundColor: item.color }]} />
+                  ) : null}
+                  <View style={{ flex: 1 }}>
+                    <Text style={m.courseName}>{item.name}</Text>
+                    {item.quarter ? (
+                      <Text style={m.courseQuarter}>{item.quarter}</Text>
+                    ) : null}
+                  </View>
+                  {selectedCourse?.id === item.id ? (
+                    <Ionicons name="checkmark" size={18} color={Colors.primary} />
+                  ) : null}
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <Text style={[m.helper, { textAlign: 'center', padding: 24 }]}>
+                  No courses found. Connect Canvas to import courses.
+                </Text>
+              }
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -226,6 +312,26 @@ export default function SyllabusUploadScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <View>
+            <Text style={m.label}>Course</Text>
+            <TouchableOpacity
+              style={[m.input, m.pickerRow]}
+              onPress={() => setPickerVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  m.pickerText,
+                  !selectedCourse && { color: Colors.textMuted },
+                ]}
+                numberOfLines={1}
+              >
+                {selectedCourse ? selectedCourse.name : 'Select a course…'}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={Colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+
           <View>
             <Text style={m.label}>Quarter</Text>
             <TextInput
@@ -404,5 +510,70 @@ const m = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderSubtle,
     paddingVertical: 4,
+  },
+  pickerRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+  },
+  pickerText: {
+    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+    marginRight: 8,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end' as const,
+  },
+  modalSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%' as any,
+    paddingBottom: 32,
+  },
+  modalHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  modalTitle: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+  },
+  courseRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderSubtle,
+    gap: 10,
+  },
+  courseRowSelected: {
+    backgroundColor: Colors.primary + '14',
+  },
+  courseDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  courseName: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+  },
+  courseQuarter: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.sm,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
 });
