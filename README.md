@@ -128,8 +128,6 @@ EXPO_PUBLIC_API_URL=https://u-wick-api-hxaketgeedg9cjcr.centralus-01.azurewebsit
 > - **Mac:** Open TextEdit → Format → Make Plain Text → save as `.env.local`
 > - **Windows:** Open Notepad → save as `.env.local` (set "Save as type" to "All Files" so it doesn't add `.txt`)
 
-For local backend development: `EXPO_PUBLIC_API_URL=http://localhost:3000/api`
-
 ### Step 7 — Connect to the right Wi-Fi
 
 > **This step is critical.** Your phone and your computer must be on the **same Wi-Fi network.**
