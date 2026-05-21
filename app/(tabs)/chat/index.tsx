@@ -11,6 +11,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { tabScreenStyles } from '@/src/styles/tabs';
@@ -24,6 +26,7 @@ import { ChatBubble } from '@/src/components/chat/ChatBubble';
 import { ChatInput } from '@/src/components/chat/ChatInput';
 import { TypingIndicator } from '@/src/components/chat/TypingIndicator';
 import { ShortcutBar } from '@/src/components/chat/ShortcutBar';
+import { ChatAtAGlance } from '@/src/components/chat/ChatAtAGlance';
 import { startSession } from '@/src/api/sessions';
 import type { ChatMessage, FlowMode } from '@/src/types/api';
 
@@ -46,6 +49,7 @@ const ALL_TABS: FlowTab[] = [
 ];
 
 export default function ChatScreen() {
+  const qc = useQueryClient();
   const { activeFlow, setFlow } = useChatStore();
   const { data: historyData, isLoading } = useChatHistory(activeFlow);
   const { sendMessage, isStreaming, streamingContent, error, clearError } =
@@ -59,6 +63,7 @@ export default function ChatScreen() {
   const [prefill, setPrefill] = useState('');
   const listRef = useRef<FlatList>(null);
   const sessionStarted = useRef(false);
+  const [atAGlanceVisible, setAtAGlanceVisible] = useState(true);
 
   const visibleTabs = ALL_TABS.filter(
     (t) => !(t.flow === 'advising' && user?.enrollment_status === 'in-major'),
@@ -87,6 +92,9 @@ export default function ChatScreen() {
   }, [localMessages.length, isStreaming, streamingContent, scrollToBottom]);
 
   function handleSend(text: string) {
+    if (activeFlow === 'free') {
+      setAtAGlanceVisible(false);
+    }
     clearError();
     setPrefill('');
     const userMsg: ChatMessage = {
@@ -126,6 +134,9 @@ export default function ChatScreen() {
           await clearHistory(activeFlow);
           setLocalMessages([]);
           useChatStore.getState().clearHistory(activeFlow);
+          if (activeFlow === 'free') {
+            setAtAGlanceVisible(true);
+          }
         },
       },
     ]);
@@ -147,6 +158,24 @@ export default function ChatScreen() {
   ];
 
   const activeTab = visibleTabs.find((t) => t.flow === activeFlow) ?? visibleTabs[0];
+
+  const showAtAGlance =
+    activeFlow === 'free' &&
+    atAGlanceVisible &&
+    localMessages.length === 0 &&
+    !isStreaming &&
+    initialized;
+
+  const displayName = user?.display_name ?? 'there';
+
+  useFocusEffect(
+    useCallback(() => {
+      if (showAtAGlance) {
+        qc.invalidateQueries({ queryKey: ['dashboard'] });
+        qc.invalidateQueries({ queryKey: ['tasks'] });
+      }
+    }, [showAtAGlance, qc]),
+  );
 
   return (
     <SafeAreaView style={tabScreenStyles.safe} edges={['top']}>
@@ -212,6 +241,9 @@ export default function ChatScreen() {
             style={{ flex: 1 }}
             data={displayItems}
             keyExtractor={(item) => item.key}
+            ListEmptyComponent={
+              showAtAGlance ? <ChatAtAGlance displayName={displayName} /> : null
+            }
             renderItem={({ item }) => {
               if (item.kind === 'message') return <ChatBubble message={item.msg} />;
               if (item.kind === 'streaming')
@@ -227,9 +259,22 @@ export default function ChatScreen() {
                 );
               return <TypingIndicator />;
             }}
-            contentContainerStyle={styles.messageList}
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-            onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
+            contentContainerStyle={[
+              styles.messageList,
+              showAtAGlance && displayItems.length === 0
+                ? { flexGrow: 1, justifyContent: 'flex-start' }
+                : null,
+            ]}
+            onContentSizeChange={() => {
+              if (!showAtAGlance) {
+                listRef.current?.scrollToEnd({ animated: false });
+              }
+            }}
+            onLayout={() => {
+              if (!showAtAGlance) {
+                listRef.current?.scrollToEnd({ animated: false });
+              }
+            }}
           />
         )}
 

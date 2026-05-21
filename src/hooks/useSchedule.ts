@@ -24,6 +24,7 @@ export function useCreateScheduleBlock() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['schedule'] });
       qc.invalidateQueries({ queryKey: ['heat'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }
@@ -41,6 +42,7 @@ export function useUpdateScheduleBlock() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['schedule'] });
       qc.invalidateQueries({ queryKey: ['heat'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }
@@ -52,6 +54,7 @@ export function useDeleteScheduleBlock() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['schedule'] });
       qc.invalidateQueries({ queryKey: ['heat'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }

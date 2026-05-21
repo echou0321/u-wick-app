@@ -1,8 +1,12 @@
 import client from './client';
-import type { User, EnrollmentStatus } from '../types/api';
+import type { User, EnrollmentStatus, Dashboard } from '../types/api';
 
 export function getMe() {
   return client.get<User>('/users/me').then((res) => res.data);
+}
+
+export function getDashboard() {
+  return client.get<Dashboard>('/users/me/dashboard').then((res) => res.data);
 }
 
 export function updateMe(body: {

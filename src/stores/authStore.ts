@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import { jwtDecode } from 'jwt-decode';
+import { useSessionStore } from './sessionStore';
 
 interface AuthStore {
   token: string | null;
@@ -18,6 +19,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     SecureStore.setItemAsync('jwt', token);
   },
   clearAuth: () => {
+    useSessionStore.getState().setSessionId(null);
     set({ token: null, userId: null });
     SecureStore.deleteItemAsync('jwt');
   },
