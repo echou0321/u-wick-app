@@ -48,6 +48,9 @@ const ALL_TABS: FlowTab[] = [
   { flow: 'advising', label: 'Advising', color: Colors.accentYellow },
 ];
 
+/** Flows that show the at-a-glance empty state (same dashboard UI on each). */
+const GLANCE_FLOWS: FlowMode[] = ['free', 'planning', 'quarter_planning', 'advising'];
+
 export default function ChatScreen() {
   const qc = useQueryClient();
   const { activeFlow, setFlow } = useChatStore();
@@ -59,29 +62,65 @@ export default function ChatScreen() {
   const isOffline = useUIStore((s) => s.offlineMode);
 
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
+  const [messagesByFlow, setMessagesByFlow] = useState<Partial<Record<FlowMode, ChatMessage[]>>>(
+    {},
+  );
+  const messagesByFlowRef = useRef(messagesByFlow);
+  messagesByFlowRef.current = messagesByFlow;
   const [initialized, setInitialized] = useState(false);
   const [prefill, setPrefill] = useState('');
   const listRef = useRef<FlatList>(null);
   const sessionStarted = useRef(false);
-  const [atAGlanceVisible, setAtAGlanceVisible] = useState(true);
+  /** Per-flow: hidden while typing; shown again when switching tabs or revisiting Chat. */
+  const [glanceHiddenByFlow, setGlanceHiddenByFlow] = useState<Partial<Record<FlowMode, boolean>>>(
+    {},
+  );
+
+  const revealGlance = useCallback(() => {
+    if (!GLANCE_FLOWS.includes(activeFlow)) return;
+    setGlanceHiddenByFlow((prev) => ({ ...prev, [activeFlow]: false }));
+  }, [activeFlow]);
+
+  const dismissGlance = useCallback(() => {
+    if (!GLANCE_FLOWS.includes(activeFlow)) return;
+    setGlanceHiddenByFlow((prev) => ({ ...prev, [activeFlow]: true }));
+  }, [activeFlow]);
 
   const visibleTabs = ALL_TABS.filter(
     (t) => !(t.flow === 'advising' && user?.enrollment_status === 'in-major'),
   );
 
-  // Reset when flow changes
+  // Switching flow tabs: restore cached messages (keep history) and show at-a-glance again
   useEffect(() => {
-    setInitialized(false);
-    setLocalMessages([]);
+    if (GLANCE_FLOWS.includes(activeFlow)) {
+      setGlanceHiddenByFlow((prev) => ({ ...prev, [activeFlow]: false }));
+    }
+
+    const cached = messagesByFlowRef.current[activeFlow];
+    if (cached !== undefined) {
+      setLocalMessages(cached);
+      setInitialized(true);
+    } else {
+      setLocalMessages([]);
+      setInitialized(false);
+    }
   }, [activeFlow]);
 
-  // Initialize from React Query on first load per flow
+  // First visit to a flow: load server history into cache
   useEffect(() => {
+    if (messagesByFlowRef.current[activeFlow] !== undefined) return;
     if (!initialized && historyData !== undefined) {
       setLocalMessages(historyData);
+      setMessagesByFlow((prev) => ({ ...prev, [activeFlow]: historyData }));
       setInitialized(true);
     }
-  }, [historyData, initialized]);
+  }, [historyData, initialized, activeFlow]);
+
+  // Keep per-flow cache in sync while user chats
+  useEffect(() => {
+    if (!initialized) return;
+    setMessagesByFlow((prev) => ({ ...prev, [activeFlow]: localMessages }));
+  }, [localMessages, activeFlow, initialized]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
@@ -92,9 +131,7 @@ export default function ChatScreen() {
   }, [localMessages.length, isStreaming, streamingContent, scrollToBottom]);
 
   function handleSend(text: string) {
-    if (activeFlow === 'free') {
-      setAtAGlanceVisible(false);
-    }
+    dismissGlance();
     clearError();
     setPrefill('');
     const userMsg: ChatMessage = {
@@ -133,10 +170,9 @@ export default function ChatScreen() {
         onPress: async () => {
           await clearHistory(activeFlow);
           setLocalMessages([]);
+          setMessagesByFlow((prev) => ({ ...prev, [activeFlow]: [] }));
           useChatStore.getState().clearHistory(activeFlow);
-          if (activeFlow === 'free') {
-            setAtAGlanceVisible(true);
-          }
+          revealGlance();
         },
       },
     ]);
@@ -160,9 +196,8 @@ export default function ChatScreen() {
   const activeTab = visibleTabs.find((t) => t.flow === activeFlow) ?? visibleTabs[0];
 
   const showAtAGlance =
-    activeFlow === 'free' &&
-    atAGlanceVisible &&
-    localMessages.length === 0 &&
+    GLANCE_FLOWS.includes(activeFlow) &&
+    !glanceHiddenByFlow[activeFlow] &&
     !isStreaming &&
     initialized;
 
@@ -170,11 +205,12 @@ export default function ChatScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (showAtAGlance) {
+      if (GLANCE_FLOWS.includes(activeFlow)) {
+        setGlanceHiddenByFlow((prev) => ({ ...prev, [activeFlow]: false }));
         qc.invalidateQueries({ queryKey: ['dashboard'] });
         qc.invalidateQueries({ queryKey: ['tasks'] });
       }
-    }, [showAtAGlance, qc]),
+    }, [activeFlow, qc]),
   );
 
   return (
@@ -236,55 +272,66 @@ export default function ChatScreen() {
             <ActivityIndicator color={activeTab.color} />
           </View>
         ) : (
-          <FlatList
-            ref={listRef}
-            style={{ flex: 1 }}
-            data={displayItems}
-            keyExtractor={(item) => item.key}
-            ListEmptyComponent={
-              showAtAGlance ? <ChatAtAGlance displayName={displayName} /> : null
-            }
-            renderItem={({ item }) => {
-              if (item.kind === 'message') return <ChatBubble message={item.msg} />;
-              if (item.kind === 'streaming')
-                return (
-                  <ChatBubble
-                    message={{
-                      role: 'assistant',
-                      content: item.content,
-                      flow: activeFlow,
-                      created_at: '',
-                    }}
-                  />
-                );
-              return <TypingIndicator />;
-            }}
-            contentContainerStyle={[
-              styles.messageList,
-              showAtAGlance && displayItems.length === 0
-                ? { flexGrow: 1, justifyContent: 'flex-start' }
-                : null,
-            ]}
-            onContentSizeChange={() => {
-              if (!showAtAGlance) {
-                listRef.current?.scrollToEnd({ animated: false });
-              }
-            }}
-            onLayout={() => {
-              if (!showAtAGlance) {
-                listRef.current?.scrollToEnd({ animated: false });
-              }
-            }}
-          />
+          <View style={styles.messageArea}>
+            <FlatList
+              ref={listRef}
+              style={{ flex: 1 }}
+              data={displayItems}
+              keyExtractor={(item) => item.key}
+              renderItem={({ item }) => {
+                if (item.kind === 'message') return <ChatBubble message={item.msg} />;
+                if (item.kind === 'streaming')
+                  return (
+                    <ChatBubble
+                      message={{
+                        role: 'assistant',
+                        content: item.content,
+                        flow: activeFlow,
+                        created_at: '',
+                      }}
+                    />
+                  );
+                return <TypingIndicator />;
+              }}
+              contentContainerStyle={styles.messageList}
+              onContentSizeChange={() => {
+                if (!showAtAGlance) {
+                  listRef.current?.scrollToEnd({ animated: false });
+                }
+              }}
+              onLayout={() => {
+                if (!showAtAGlance) {
+                  listRef.current?.scrollToEnd({ animated: false });
+                }
+              }}
+            />
+            {showAtAGlance ? (
+              <ScrollView
+                style={styles.glanceOverlay}
+                contentContainerStyle={styles.messageList}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <ChatAtAGlance displayName={displayName} />
+              </ScrollView>
+            ) : null}
+          </View>
         )}
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <ShortcutBar activeFlow={activeFlow} onPrefill={setPrefill} />
+        <ShortcutBar
+          activeFlow={activeFlow}
+          onPrefill={(text) => {
+            setPrefill(text);
+            dismissGlance();
+          }}
+        />
         <ChatInput
           onSend={handleSend}
           disabled={isStreaming || isOffline}
           prefill={prefill}
+          onInputActivity={dismissGlance}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>

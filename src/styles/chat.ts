@@ -344,6 +344,19 @@ export const glanceStyles = StyleSheet.create({
 });
 
 export const chatScreenStyles = StyleSheet.create({
+  messageArea: {
+    flex: 1,
+    position: 'relative' as const,
+  },
+  glanceOverlay: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: Colors.bg,
+    zIndex: 10,
+  },
   messageList: {
     paddingHorizontal: 16,
     paddingVertical: 12,
