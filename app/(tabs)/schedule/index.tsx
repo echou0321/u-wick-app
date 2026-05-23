@@ -407,7 +407,7 @@ export default function ScheduleScreen() {
         </View>
       </View>
 
-      {/* Heat map — fixed above the expandable calendar */}
+      {/* Heat map — fixed above the calendar */}
       <View style={s.heatSection}>
         {heatMapVisible && (
           <View style={s.heatBar}>
@@ -416,20 +416,18 @@ export default function ScheduleScreen() {
                   <TouchableOpacity
                     key={entry.week_start}
                     style={[s.heatSegment, { backgroundColor: entry.color }]}
-                    onLongPress={() =>
+                    // Tap or long-press shows the week + workload label
+                    // without changing the calendar — earlier behavior of
+                    // navigating the calendar to that week was confusing.
+                    onPress={() =>
                       Alert.alert(
                         `Week of ${new Date(entry.week_start).toLocaleDateString(undefined, {
                           month: 'short',
                           day: 'numeric',
                         })}`,
-                        entry.label.charAt(0).toUpperCase() + entry.label.slice(1),
+                        `Workload: ${entry.label.charAt(0).toUpperCase() + entry.label.slice(1)}`,
                       )
                     }
-                    onPress={() => {
-                      const d = toDateStr(new Date(entry.week_start));
-                      setSelectedDate(d);
-                      setViewMonth(d.slice(0, 7));
-                    }}
                   />
                 ))
               : Array.from({ length: 8 }).map((_, i) => (
@@ -438,7 +436,24 @@ export default function ScheduleScreen() {
           </View>
         )}
         <View style={s.heatToggleRow}>
-          <Text style={s.heatLabel}>Workload</Text>
+          <View style={localStyles.heatLabelRow}>
+            <Text style={s.heatLabel}>Workload</Text>
+            <TouchableOpacity
+              hitSlop={10}
+              onPress={() =>
+                Alert.alert(
+                  'Workload heat map',
+                  'A 7-day snapshot of how busy your upcoming weeks look. Each segment is one week (left = this week, right = 7 weeks out), colored by how many assignments and study blocks you have due:\n\n🟢 Light\n🟡 Moderate\n🟠 Heavy\n🔴 Intense\n\nTap any segment to see its date and workload level.',
+                )
+              }
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={16}
+                color={Colors.textMuted}
+              />
+            </TouchableOpacity>
+          </View>
           <Switch
             value={heatMapVisible}
             onValueChange={handleHeatToggle}
@@ -870,6 +885,12 @@ const localStyles = StyleSheet.create({
     fontFamily: Fonts.bodyMedium,
     fontSize: FontSizes.base,
     color: Colors.textSecondary,
+  },
+  // ── Heat map label + info icon row ───────────────────────────────────
+  heatLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   // ── Picker rows (date / time) in the add/edit block modal ────────────
   pickerRow: {
