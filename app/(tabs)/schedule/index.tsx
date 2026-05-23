@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
-import { CalendarProvider, ExpandableCalendar } from 'react-native-calendars';
+import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,7 +39,12 @@ import type { ScheduleBlock, BlockType, Task } from '@/src/types/api';
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function toDateStr(date: Date): string {
-  return date.toISOString().split('T')[0];
+  // Use local calendar components — NOT toISOString() — so a block at
+  // "May 22, 10 PM Pacific" doesn't get attributed to May 23 in UTC.
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function quarterStart(): string {
@@ -443,56 +448,55 @@ export default function ScheduleScreen() {
         </View>
       </View>
 
-      {/* CalendarProvider owns the expandable calendar + scrollable block list */}
-      <CalendarProvider
-        date={selectedDate}
-        onDateChanged={(date) => setSelectedDate(date)}
-        onMonthChange={(month) => {
+      {/* Standard month-view Calendar — ExpandableCalendar conflicts with
+          react-native-reanimated v4 (collapses to zero height), so we use
+          the simpler Calendar component until that's resolved upstream. */}
+      <Calendar
+        current={selectedDate}
+        onDayPress={(day: { dateString: string }) => setSelectedDate(day.dateString)}
+        onMonthChange={(month: { year: number; month: number }) => {
           const m = String(month.month).padStart(2, '0');
           setViewMonth(`${month.year}-${m}`);
         }}
-        style={{ flex: 1 }}
-      >
-        <ExpandableCalendar
-          initialPosition={ExpandableCalendar.positions.CLOSED}
-          markedDates={markedDates}
-          markingType="multi-dot"
-          theme={{
-            backgroundColor: Colors.bg,
-            calendarBackground: Colors.bg,
-            textSectionTitleColor: Colors.textMuted,
-            selectedDayBackgroundColor: Colors.primary,
-            selectedDayTextColor: Colors.white,
-            todayTextColor: Colors.primaryLight,
-            dayTextColor: Colors.textPrimary,
-            textDisabledColor: Colors.textMuted,
-            dotColor: Colors.accentTeal,
-            selectedDotColor: Colors.white,
-            arrowColor: Colors.primary,
-            monthTextColor: Colors.textPrimary,
-            indicatorColor: Colors.primary,
-            textDayFontFamily: Fonts.body,
-            textMonthFontFamily: Fonts.heading,
-            textDayHeaderFontFamily: Fonts.bodyMedium,
-            textDayFontSize: FontSizes.sm,
-            textMonthFontSize: FontSizes.base,
-            textDayHeaderFontSize: FontSizes.xs,
-          }}
-        />
+        markedDates={markedDates}
+        markingType="multi-dot"
+        enableSwipeMonths
+        theme={{
+          backgroundColor: Colors.bg,
+          calendarBackground: Colors.bg,
+          textSectionTitleColor: Colors.textMuted,
+          selectedDayBackgroundColor: Colors.primary,
+          selectedDayTextColor: Colors.white,
+          todayTextColor: Colors.primaryLight,
+          dayTextColor: Colors.textPrimary,
+          textDisabledColor: Colors.textMuted,
+          dotColor: Colors.accentTeal,
+          selectedDotColor: Colors.white,
+          arrowColor: Colors.primary,
+          monthTextColor: Colors.textPrimary,
+          indicatorColor: Colors.primary,
+          textDayFontFamily: Fonts.body,
+          textMonthFontFamily: Fonts.heading,
+          textDayHeaderFontFamily: Fonts.bodyMedium,
+          textDayFontSize: FontSizes.sm,
+          textMonthFontSize: FontSizes.base,
+          textDayHeaderFontSize: FontSizes.xs,
+        }}
+      />
 
-        {/* Day blocks list scrolls below the expandable calendar */}
-        <ScrollView
-          style={{ flex: 1 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={Colors.primary}
-              colors={[Colors.primary]}
-            />
-          }
-        >
+      {/* Day blocks list scrolls below the calendar */}
+      <ScrollView
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
+      >
           <View style={s.blocksSection}>
             <Text style={s.blocksSectionTitle}>
               {selectedDate === today
@@ -618,8 +622,7 @@ export default function ScheduleScreen() {
               </>
             )}
           </View>
-        </ScrollView>
-      </CalendarProvider>
+      </ScrollView>
 
       {/* Create / Edit modal */}
       <Modal
