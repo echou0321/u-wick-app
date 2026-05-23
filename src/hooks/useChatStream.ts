@@ -146,16 +146,29 @@ export function useChatStream(flow: FlowMode) {
               // XML blocks the assistant embedded in its token stream.
               const inlineActions = parseInlineSideEffects(accumulated);
               const inlineKeys = getInvalidationKeys(inlineActions);
-              const allKeys = [...pendingKeys, ...inlineKeys];
+              // The backend doesn't always announce its side effects — it may
+              // silently create a task or block and only mention it in prose.
+              // To guarantee the UI never goes stale after a chat turn, we
+              // always invalidate the core caches the assistant might have
+              // touched. Cost is negligible (a few small GETs only when an
+              // observer is mounted) and it eliminates a whole class of bugs.
+              const baselineKeys: string[][] = [
+                ['tasks'],
+                ['schedule'],
+                ['heat'],
+              ];
+              const allKeys = [...pendingKeys, ...inlineKeys, ...baselineKeys];
               const dedup = new Set<string>();
               for (const key of allKeys) {
                 const sig = key.join('|');
                 if (dedup.has(sig)) continue;
                 dedup.add(sig);
-                qc.invalidateQueries({ queryKey: key });
+                // refetchType: 'active' forces mounted queries to refetch
+                // immediately rather than only on next mount.
+                qc.invalidateQueries({ queryKey: key, refetchType: 'active' });
               }
 
-              if (__DEV__ && (pendingKeys.length || inlineActions.length)) {
+              if (__DEV__) {
                 // eslint-disable-next-line no-console
                 console.log('[chat] invalidated', Array.from(dedup), {
                   sse: pendingKeys.length,
@@ -209,16 +222,17 @@ export function useChatStream(flow: FlowMode) {
             }
             if (!finalized && accumulated) {
               onFinalized(stripSideEffectBlocks(accumulated));
-              // Stream ended without a `done` event — still try to apply
-              // any side effects we can mine from the token text.
+              // Stream ended without a `done` event — still invalidate the
+              // baseline caches plus anything we can mine from the text.
               const fallbackActions = parseInlineSideEffects(accumulated);
               const fallbackKeys = getInvalidationKeys(fallbackActions);
+              const baselineKeys: string[][] = [['tasks'], ['schedule'], ['heat']];
               const dedup = new Set<string>();
-              for (const key of [...pendingKeys, ...fallbackKeys]) {
+              for (const key of [...pendingKeys, ...fallbackKeys, ...baselineKeys]) {
                 const sig = key.join('|');
                 if (dedup.has(sig)) continue;
                 dedup.add(sig);
-                qc.invalidateQueries({ queryKey: key });
+                qc.invalidateQueries({ queryKey: key, refetchType: 'active' });
               }
             }
             resolve();

@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View,
   Text,
@@ -107,6 +108,17 @@ export default function TodoScreen() {
 
   const { data: activeTasks, isLoading, isRefetching } = useTasks({ done: false });
   const { data: doneTasks } = useTasks({ done: true });
+
+  // Always refetch the task list when the tab regains focus. Tabs stay
+  // mounted in Expo Router, so without this the cache could go stale after
+  // an unrelated turn in chat — and we'd rather burn a small GET than
+  // surprise the user with missing tasks they just asked the assistant to
+  // create.
+  useFocusEffect(
+    useCallback(() => {
+      qc.invalidateQueries({ queryKey: ['tasks'], refetchType: 'active' });
+    }, [qc]),
+  );
   const { mutate: updateTask, mutateAsync: updateTaskAsync } = useUpdateTask();
   const { mutate: deleteTask } = useDeleteTask();
   const { mutate: createTask, isPending: isCreating } = useCreateTask();

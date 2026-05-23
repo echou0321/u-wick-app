@@ -15,7 +15,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { CalendarProvider, ExpandableCalendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -320,6 +320,16 @@ export default function ScheduleScreen() {
       },
     ]);
   }, [editingBlock, deleteBlock, closeSheet]);
+
+  // Refresh schedule + heat + tasks whenever the tab regains focus, so
+  // chat-driven changes appear without a manual pull-to-refresh.
+  useFocusEffect(
+    useCallback(() => {
+      qc.invalidateQueries({ queryKey: ['schedule'], refetchType: 'active' });
+      qc.invalidateQueries({ queryKey: ['heat'], refetchType: 'active' });
+      qc.invalidateQueries({ queryKey: ['tasks'], refetchType: 'active' });
+    }, [qc]),
+  );
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
