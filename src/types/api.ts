@@ -67,6 +67,34 @@ export interface HeatEntry {
   color: string;
 }
 
+export interface DashboardScheduleBlock {
+  id: string;
+  course_id: string | null;
+  title: string;
+  start_time: string;
+  end_time: string;
+  block_type: BlockType;
+  color: string | null;
+}
+
+export interface Dashboard {
+  tasks_due_soon: Task[];
+  schedule_today: DashboardScheduleBlock[];
+  nudges: Array<{
+    id: string;
+    type: string;
+    title: string;
+    body: string | null;
+    scheduled_for: string;
+    related_task_id: string | null;
+  }>;
+  heat_this_week: {
+    raw_score: number;
+    label: 'light' | 'moderate' | 'heavy' | 'intense';
+    color: string;
+  };
+}
+
 export interface Major {
   id: string;
   major_name: string;

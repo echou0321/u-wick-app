@@ -36,7 +36,7 @@ export const bubbleStyles = StyleSheet.create({
 export const inputStyles = StyleSheet.create({
   row: {
     flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+    alignItems: 'flex-end' as const,
     gap: 8,
     padding: 12,
     borderTopWidth: 1,
@@ -54,6 +54,8 @@ export const inputStyles = StyleSheet.create({
     color: Colors.textPrimary,
     fontFamily: Fonts.body,
     fontSize: FontSizes.base,
+    maxHeight: 120,
+    textAlignVertical: 'top' as const,
   },
   inputDisabled: {
     opacity: 0.5,
@@ -239,7 +241,122 @@ export const flowTabStyles = StyleSheet.create({
   },
 });
 
+export const glanceStyles = StyleSheet.create({
+  wrap: {
+    paddingBottom: 12,
+    gap: 18,
+  },
+  greeting: {
+    fontFamily: Fonts.heading,
+    fontSize: FontSizes['3xl'],
+    color: Colors.textPrimary,
+    lineHeight: FontSizes['3xl'] * 1.15,
+  },
+  summaryCard: {
+    backgroundColor: Colors.surfaceRaised,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 20,
+  },
+  summaryText: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.lg,
+    color: Colors.textPrimary,
+    lineHeight: FontSizes.lg * 1.55,
+  },
+  sectionTitle: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.sm,
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 10,
+  },
+  sectionCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  todoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  todoRowLast: {
+    borderBottomWidth: 0,
+  },
+  todoTitle: {
+    flex: 1,
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.md,
+    color: Colors.textPrimary,
+  },
+  todoTitleDone: {
+    color: Colors.textMuted,
+    textDecorationLine: 'line-through',
+  },
+  emptyLine: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textMuted,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  scheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  scheduleRowLast: {
+    borderBottomWidth: 0,
+  },
+  scheduleBar: {
+    width: 4,
+    borderRadius: 2,
+    alignSelf: 'stretch',
+    minHeight: 36,
+  },
+  scheduleContent: {
+    flex: 1,
+  },
+  scheduleTitle: {
+    fontFamily: Fonts.bodyMedium,
+    fontSize: FontSizes.md,
+    color: Colors.textPrimary,
+    marginBottom: 2,
+  },
+  scheduleTime: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textMuted,
+  },
+});
+
 export const chatScreenStyles = StyleSheet.create({
+  messageArea: {
+    flex: 1,
+    position: 'relative' as const,
+  },
+  glanceOverlay: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: Colors.bg,
+    zIndex: 10,
+  },
   messageList: {
     paddingHorizontal: 16,
     paddingVertical: 12,

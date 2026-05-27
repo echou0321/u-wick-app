@@ -8,9 +8,17 @@ interface ChatInputProps {
   disabled?: boolean;
   prefill?: string;
   inputRef?: React.RefObject<TextInput>;
+  /** Fired when the user types in the field (dismisses at-a-glance overlay). */
+  onInputActivity?: () => void;
 }
 
-export function ChatInput({ onSend, disabled = false, prefill, inputRef }: ChatInputProps) {
+export function ChatInput({
+  onSend,
+  disabled = false,
+  prefill,
+  inputRef,
+  onInputActivity,
+}: ChatInputProps) {
   const [value, setValue] = useState('');
   const prevPrefillRef = useRef<string | undefined>(undefined);
 
@@ -18,8 +26,9 @@ export function ChatInput({ onSend, disabled = false, prefill, inputRef }: ChatI
     if (prefill !== undefined && prefill !== '' && prefill !== prevPrefillRef.current) {
       prevPrefillRef.current = prefill;
       setValue(prefill);
+      onInputActivity?.();
     }
-  }, [prefill]);
+  }, [prefill, onInputActivity]);
 
   function handleSend() {
     const trimmed = value.trim();
@@ -36,10 +45,13 @@ export function ChatInput({ onSend, disabled = false, prefill, inputRef }: ChatI
         placeholder="Message Wick"
         placeholderTextColor={Colors.textMuted}
         value={value}
-        onChangeText={setValue}
+        onChangeText={(text) => {
+          setValue(text);
+          if (text.length > 0) onInputActivity?.();
+        }}
         onSubmitEditing={handleSend}
         returnKeyType="send"
-        multiline={false}
+        multiline
         editable={!disabled}
       />
       <TouchableOpacity

@@ -135,7 +135,6 @@ export function useChatStream(flow: FlowMode) {
 
             if (event.type === 'token' && event.content) {
               accumulated += event.content;
-              setStreamingContent(stripSideEffectBlocks(accumulated));
             } else if (event.type === 'side_effects' && event.actions) {
               pendingKeys.push(...getInvalidationKeys(event.actions));
             } else if (event.type === 'done') {

@@ -79,30 +79,104 @@ constants/
 
 ## Getting Started
 
-### Prerequisites
+Follow these steps to get the app running on your phone. Takes about 10–15 minutes the first time.
 
-- Node.js 18+
-- Expo Go (for device testing without push notifications)
-- `.env.local` at the project root (see below)
+### Step 1 — Install Node.js on your computer
 
-### Environment
+1. Go to https://nodejs.org and click the **LTS** button (left side — the stable version)
+2. Run the installer with all defaults
+3. To verify: open **Terminal** (Mac) or **Command Prompt** (Windows) and type `node -v` — you should see something like `v20.x.x`
 
-Create `.env.local` (never committed):
+### Step 2 — Install Git
+
+1. Go to https://git-scm.com/downloads, download for your OS, and install with all defaults
+
+### Step 3 — Install Expo Go on your phone
+
+- **iPhone:** Search "Expo Go" in the App Store
+- **Android:** Search "Expo Go" in the Google Play Store
+
+Create a free account at https://expo.dev — you'll need it to log in to Expo Go.
+
+### Step 4 — Get the code
+
+Open Terminal / Command Prompt and run:
 
 ```bash
-EXPO_PUBLIC_API_URL=https://u-wick-api-hxaketgeedg9cjcr.centralus-01.azurewebsites.net/api
+git clone <repo-url>
+cd u-wick-app
 ```
 
-For local backend: `EXPO_PUBLIC_API_URL=http://localhost:3000/api`
-
-### Install & Run
+### Step 5 — Install dependencies
 
 ```bash
 npm install
+```
+
+This downloads all the libraries the app needs. Takes 2–5 minutes — the scrolling text is normal.
+
+### Step 6 — Create the environment file
+
+The app needs to know where the backend server lives. Create a file called `.env.local` in the `u-wick-app` folder and paste this line into it:
+
+```
+EXPO_PUBLIC_API_URL=https://u-wick-api-hxaketgeedg9cjcr.centralus-01.azurewebsites.net/api
+```
+
+> **Tips for creating the file:**
+> - **VS Code:** Right-click in the Explorer panel → New File → name it `.env.local`
+> - **Mac:** Open TextEdit → Format → Make Plain Text → save as `.env.local`
+> - **Windows:** Open Notepad → save as `.env.local` (set "Save as type" to "All Files" so it doesn't add `.txt`)
+
+### Step 7 — Connect to the right Wi-Fi
+
+> **This step is critical.** Your phone and your computer must be on the **same Wi-Fi network.**
+
+When running in development mode, your computer streams the app to your phone over the local network. If they're on different networks the app won't load.
+
+- Connect both to the same home or office Wi-Fi
+- A personal hotspot (phone → computer) also works
+- Most university/corporate networks block device-to-device traffic — use a hotspot instead if on one of those
+
+If you're on a restricted network and can't use a hotspot, run `npm start -- --tunnel` instead of `npm start` (slower but works over any connection).
+
+### Step 8 — Start the app
+
+```bash
 npm start
 ```
 
-Scan the QR code with Expo Go. Your phone and computer must be on the same Wi-Fi network. Use `npm start -- --tunnel` if on a restricted network.
+After a few seconds a **QR code** appears in the terminal.
+
+- **iPhone:** Open the **Camera** app and point it at the QR code — tap the banner
+- **Android:** Open **Expo Go** → "Scan QR code"
+
+The first load takes 30–60 seconds while the code compiles. After that, any code changes appear on your phone automatically within a few seconds.
+
+Press `Ctrl + C` in the terminal to stop the server.
+
+### Pulling updates from teammates
+
+Whenever someone pushes new code:
+
+```bash
+git pull
+npm install
+```
+
+Then restart with `npm start`.
+
+### Common problems
+
+| Problem | Fix |
+|---|---|
+| `npm install` fails | Make sure Node.js is installed — run `node -v` to check |
+| QR code won't connect | Phone and computer must be on the same Wi-Fi (Step 7) |
+| Blank or error screen | Check that `.env.local` is saved correctly with no `.txt` extension |
+| "Network request failed" in the app | The Azure backend may be sleeping — wait 30 s and retry |
+| "Port 8081 already in use" | Another Expo server is running — quit it, or press `shift+r` in the terminal |
+
+---
 
 ### Type Check
 

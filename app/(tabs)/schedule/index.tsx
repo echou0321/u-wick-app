@@ -294,7 +294,7 @@ export default function ScheduleScreen() {
           block_type: form.block_type,
           color: form.color || null,
         });
-        logEvent('study_block_added', { block_type: form.block_type });
+        logEvent('study_block_added', { block_type: form.block_type }).catch(() => {});
       }
       closeSheet();
     } catch {
@@ -362,7 +362,7 @@ export default function ScheduleScreen() {
 
   const handleHeatToggle = useCallback(() => {
     toggleHeatMap();
-    logEvent('heat_map_toggled', { visible: !heatMapVisible });
+    logEvent('heat_map_toggled', { visible: !heatMapVisible }).catch(() => {});
   }, [toggleHeatMap, heatMapVisible]);
 
   const isMutating = createBlock.isPending || updateBlock.isPending;

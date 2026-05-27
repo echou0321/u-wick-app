@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,15 +7,21 @@ import {
   Pressable,
   Alert,
   ScrollView,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
 } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { tabScreenStyles as styles } from '@/src/styles/tabs';
 import { useUser } from '@/src/hooks/useUser';
 import { useIcsStatus } from '@/src/hooks/useIcsStatus';
-import { syncIcs, disconnectIcs } from '@/src/api/ics';
+import { connectIcs, syncIcs, disconnectIcs } from '@/src/api/ics';
 import { logEvent } from '@/src/api/sessions';
 import { useAuthStore } from '@/src/stores/authStore';
+import { Colors } from '@/constants/colors';
 
 function fmtDate(value: string | null) {
   if (!value) return 'Never';
@@ -29,6 +35,41 @@ export default function ProfileScreen() {
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const { data: user, isLoading: userLoading, isError: userError } = useUser();
   const { data: icsStatus, isLoading: icsLoading } = useIcsStatus();
+
+  const [connectModalVisible, setConnectModalVisible] = useState(false);
+  const [icsUrl, setIcsUrl] = useState('');
+  const [urlError, setUrlError] = useState('');
+
+  const connectMutation = useMutation({
+    mutationFn: connectIcs,
+    onSuccess: async (result) => {
+      setConnectModalVisible(false);
+      setIcsUrl('');
+      setUrlError('');
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['ics-status'] }),
+        qc.invalidateQueries({ queryKey: ['tasks'] }),
+      ]);
+      Alert.alert('Canvas connected!', `${result.tasks_imported} tasks synced from Canvas.`);
+    },
+    onError: () => {
+      setUrlError('Could not connect. Double-check your URL and try again.');
+    },
+  });
+
+  function handleConnect() {
+    const trimmed = icsUrl.trim();
+    if (!trimmed) {
+      setUrlError('Please enter your Canvas ICS URL');
+      return;
+    }
+    if (!trimmed.startsWith('https://')) {
+      setUrlError('URL must start with https://');
+      return;
+    }
+    setUrlError('');
+    connectMutation.mutate(trimmed);
+  }
 
   const syncMutation = useMutation({
     mutationFn: syncIcs,
@@ -178,24 +219,39 @@ export default function ProfileScreen() {
               {icsLoading ? 'Loading...' : fmtDate(icsStatus?.last_synced ?? user.ics_last_synced)}
             </Text>
           </View>
-          <Pressable
-            style={[styles.syncBtn, syncMutation.isPending ? styles.btnDisabled : null]}
-            onPress={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
-          >
-            <Text style={styles.syncBtnText}>
-              {syncMutation.isPending ? 'Syncing...' : 'Sync now'}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.logoutBtn, disconnectMutation.isPending ? styles.btnDisabled : null]}
-            onPress={handleDisconnectIcs}
-            disabled={disconnectMutation.isPending}
-          >
-            <Text style={styles.logoutText}>
-              {disconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect Canvas'}
-            </Text>
-          </Pressable>
+          {icsStatus?.connected ? (
+            <>
+              <Pressable
+                style={[styles.syncBtn, syncMutation.isPending ? styles.btnDisabled : null]}
+                onPress={() => syncMutation.mutate()}
+                disabled={syncMutation.isPending}
+              >
+                <Text style={styles.syncBtnText}>
+                  {syncMutation.isPending ? 'Syncing...' : 'Sync now'}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.logoutBtn, disconnectMutation.isPending ? styles.btnDisabled : null]}
+                onPress={handleDisconnectIcs}
+                disabled={disconnectMutation.isPending}
+              >
+                <Text style={styles.logoutText}>
+                  {disconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect Canvas'}
+                </Text>
+              </Pressable>
+            </>
+          ) : (
+            <Pressable
+              style={styles.syncBtn}
+              onPress={() => {
+                setIcsUrl('');
+                setUrlError('');
+                setConnectModalVisible(true);
+              }}
+            >
+              <Text style={styles.syncBtnText}>Connect Canvas</Text>
+            </Pressable>
+          )}
         </View>
 
         {user.enrollment_status === 'in-major' ? (
@@ -210,6 +266,119 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>Log out</Text>
         </Pressable>
       </ScrollView>
+
+      <Modal
+        visible={connectModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setConnectModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={s.modalBackdrop}>
+            <View style={s.modalCard}>
+              <Text style={s.modalTitle}>Canvas ICS URL</Text>
+              <TextInput
+                style={[s.input, urlError ? s.inputError : undefined]}
+                placeholder="https://canvas.uw.edu/feeds/calendars/..."
+                placeholderTextColor={Colors.textMuted}
+                value={icsUrl}
+                onChangeText={(t) => {
+                  setIcsUrl(t);
+                  setUrlError('');
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+              />
+              {urlError ? <Text style={s.errorText}>{urlError}</Text> : null}
+              <Pressable
+                style={[s.connectBtn, connectMutation.isPending ? s.connectBtnDisabled : null]}
+                onPress={handleConnect}
+                disabled={connectMutation.isPending}
+              >
+                {connectMutation.isPending ? (
+                  <ActivityIndicator color={Colors.white} />
+                ) : (
+                  <Text style={s.connectBtnText}>Connect</Text>
+                )}
+              </Pressable>
+              <Pressable style={s.cancelBtn} onPress={() => setConnectModalVisible(false)}>
+                <Text style={s.cancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+const s = StyleSheet.create({
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: Colors.surfaceRaised,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    padding: 24,
+    paddingBottom: 44,
+  },
+  modalTitle: {
+    color: Colors.textPrimary,
+    fontFamily: 'Syne_700Bold',
+    fontSize: 18,
+    marginBottom: 16,
+  },
+  input: {
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 14,
+    color: Colors.textPrimary,
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 14,
+  },
+  inputError: {
+    borderColor: '#F76A6A',
+  },
+  errorText: {
+    color: '#F76A6A',
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 12,
+    marginTop: 6,
+  },
+  connectBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  connectBtnDisabled: {
+    opacity: 0.5,
+  },
+  connectBtnText: {
+    color: Colors.white,
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 15,
+  },
+  cancelBtn: {
+    marginTop: 12,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  cancelText: {
+    color: Colors.textMuted,
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 14,
+  },
+});
