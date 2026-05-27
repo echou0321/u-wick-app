@@ -11,12 +11,15 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  RefreshControl,
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { CalendarProvider, ExpandableCalendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { useQueryClient } from '@tanstack/react-query';
 import { Colors } from '@/constants/colors';
 import { Fonts, FontSizes } from '@/constants/typography';
 import { tabScreenStyles as ts } from '@/src/styles/tabs';
@@ -30,7 +33,7 @@ import {
   useDeleteScheduleBlock,
 } from '@/src/hooks/useSchedule';
 import { logEvent } from '@/src/api/sessions';
-import { useTasks } from '@/src/hooks/useTasks';
+import { useTasks, useUpdateTask } from '@/src/hooks/useTasks';
 import type { ScheduleBlock, BlockType, Task } from '@/src/types/api';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -82,11 +85,11 @@ function blockTypeColors(type: BlockType): { bg: string; text: string; border: s
 
 interface BlockFormState {
   title: string;
-  date: string;
-  startHour: string;
-  startMin: string;
-  endHour: string;
-  endMin: string;
+  // `date` holds the day; only year/month/day are read.
+  // `startTime` / `endTime` hold the times of day; only hours/minutes are read.
+  date: Date;
+  startTime: Date;
+  endTime: Date;
   block_type: BlockType;
   color: string;
 }
@@ -98,23 +101,37 @@ const BLOCK_TYPES: { label: string; value: BlockType }[] = [
   { label: 'Other', value: 'other' },
 ];
 
-function emptyForm(date: string): BlockFormState {
+function atHour(h: number, m: number): Date {
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+
+function emptyForm(dateStr: string): BlockFormState {
+  const [y, m, day] = dateStr.split('-').map(Number);
   return {
     title: '',
-    date,
-    startHour: '09',
-    startMin: '00',
-    endHour: '10',
-    endMin: '00',
+    date: new Date(y, (m ?? 1) - 1, day ?? 1),
+    startTime: atHour(9, 0),
+    endTime: atHour(10, 0),
     block_type: 'study',
     color: '',
   };
 }
 
+function combine(date: Date, time: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const hh = String(time.getHours()).padStart(2, '0');
+  const mm = String(time.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${d}T${hh}:${mm}:00`;
+}
+
 function formToTimes(form: BlockFormState): { start_time: string; end_time: string } {
   return {
-    start_time: `${form.date}T${form.startHour.padStart(2, '0')}:${form.startMin.padStart(2, '0')}:00`,
-    end_time: `${form.date}T${form.endHour.padStart(2, '0')}:${form.endMin.padStart(2, '0')}:00`,
+    start_time: combine(form.date, form.startTime),
+    end_time: combine(form.date, form.endTime),
   };
 }
 
@@ -123,14 +140,25 @@ function blockToForm(block: ScheduleBlock): BlockFormState {
   const end = new Date(block.end_time);
   return {
     title: block.title,
-    date: toDateStr(start),
-    startHour: String(start.getHours()).padStart(2, '0'),
-    startMin: String(start.getMinutes()).padStart(2, '0'),
-    endHour: String(end.getHours()).padStart(2, '0'),
-    endMin: String(end.getMinutes()).padStart(2, '0'),
+    date: new Date(start.getFullYear(), start.getMonth(), start.getDate()),
+    startTime: start,
+    endTime: end,
     block_type: block.block_type,
     color: block.color ?? '',
   };
+}
+
+function formatDateLong(d: Date): string {
+  return d.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatTimeShort(d: Date): string {
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
 // ── Main screen ───────────────────────────────────────────────────────────────
@@ -157,10 +185,19 @@ export default function ScheduleScreen() {
   const createBlock = useCreateScheduleBlock();
   const updateBlock = useUpdateScheduleBlock();
   const deleteBlock = useDeleteScheduleBlock();
+  const updateTask = useUpdateTask();
+  const qc = useQueryClient();
 
   const [sheetVisible, setSheetVisible] = useState(false);
   const [editingBlock, setEditingBlock] = useState<ScheduleBlock | null>(null);
   const [form, setForm] = useState<BlockFormState>(emptyForm(today));
+  // Which of the three pickers (date / start time / end time) is open.
+  // Android renders the picker as a native modal that auto-closes; iOS
+  // renders inline below the row.
+  const [activePicker, setActivePicker] = useState<
+    'date' | 'startTime' | 'endTime' | null
+  >(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const dayBlocks = useMemo(() => {
     if (!blocks) return [];
@@ -230,6 +267,7 @@ export default function ScheduleScreen() {
   const closeSheet = useCallback(() => {
     setSheetVisible(false);
     setEditingBlock(null);
+    setActivePicker(null);
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -282,6 +320,45 @@ export default function ScheduleScreen() {
       },
     ]);
   }, [editingBlock, deleteBlock, closeSheet]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['schedule'] }),
+        qc.invalidateQueries({ queryKey: ['heat'] }),
+        qc.invalidateQueries({ queryKey: ['tasks'] }),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [qc]);
+
+  const handleToggleTaskDone = useCallback(
+    (task: Task) => {
+      const apply = () => {
+        updateTask.mutate({ id: task.id, body: { done: !task.done } });
+        if (!task.done) logEvent('task_completed', { source: task.source });
+      };
+      // Canvas / syllabus / AI tasks: backend will re-import on next sync.
+      // Warn the user once before flipping, matching the TODO tab pattern.
+      if (!task.done && task.source !== 'manual') {
+        const label =
+          task.source === 'ics' ? 'Canvas' : task.source === 'syllabus' ? 'syllabus' : 'AI';
+        Alert.alert(
+          'Mark complete?',
+          `This ${label}-imported task will reappear on the next sync unless removed at the source.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Mark done', onPress: apply },
+          ],
+        );
+      } else {
+        apply();
+      }
+    },
+    [updateTask],
+  );
 
   const handleHeatToggle = useCallback(() => {
     toggleHeatMap();
@@ -394,7 +471,18 @@ export default function ScheduleScreen() {
         />
 
         {/* Day blocks list scrolls below the expandable calendar */}
-        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={Colors.primary}
+              colors={[Colors.primary]}
+            />
+          }
+        >
           <View style={s.blocksSection}>
             <Text style={s.blocksSectionTitle}>
               {selectedDate === today
@@ -469,8 +557,27 @@ export default function ScheduleScreen() {
                       activeOpacity={0.7}
                     >
                       <View style={[s.blockColorBar, { backgroundColor: accent }]} />
+                      {/* Tap-to-complete checkbox — stops propagation so the
+                          row doesn't also navigate. Mirrors the TODO tab UX. */}
+                      <TouchableOpacity
+                        onPress={() => handleToggleTaskDone(task)}
+                        hitSlop={8}
+                        style={localStyles.taskCheckBtn}
+                      >
+                        <Ionicons
+                          name={task.done ? 'checkmark-circle' : 'ellipse-outline'}
+                          size={22}
+                          color={task.done ? Colors.accentTeal : Colors.textMuted}
+                        />
+                      </TouchableOpacity>
                       <View style={s.blockContent}>
-                        <Text style={s.blockTitle} numberOfLines={1}>
+                        <Text
+                          style={[
+                            s.blockTitle,
+                            task.done && localStyles.taskTitleDone,
+                          ]}
+                          numberOfLines={1}
+                        >
                           {task.title}
                         </Text>
                         <Text style={s.blockTime}>
@@ -535,67 +642,119 @@ export default function ScheduleScreen() {
                 />
               </View>
 
-              {/* Date */}
+              {/* Date — native picker */}
               <View>
-                <Text style={s.sheetLabel}>Date (YYYY-MM-DD)</Text>
-                <TextInput
-                  style={s.sheetInput}
-                  value={form.date}
-                  onChangeText={(v) => setForm((f) => ({ ...f, date: v }))}
-                  placeholder="2026-05-07"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="numbers-and-punctuation"
-                />
+                <Text style={s.sheetLabel}>Date</Text>
+                <TouchableOpacity
+                  style={[s.sheetInput, localStyles.pickerRow]}
+                  onPress={() =>
+                    setActivePicker((p) => (p === 'date' ? null : 'date'))
+                  }
+                  activeOpacity={0.7}
+                >
+                  <Text style={localStyles.pickerValue}>
+                    {formatDateLong(form.date)}
+                  </Text>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={18}
+                    color={Colors.textMuted}
+                  />
+                </TouchableOpacity>
+                {activePicker === 'date' && (
+                  <DateTimePicker
+                    value={form.date}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                    themeVariant="dark"
+                    accentColor={Colors.primary}
+                    onChange={(_, picked) => {
+                      if (Platform.OS !== 'ios') setActivePicker(null);
+                      if (picked) setForm((f) => ({ ...f, date: picked }));
+                    }}
+                  />
+                )}
               </View>
 
               {/* Start time */}
               <View>
-                <Text style={s.sheetLabel}>Start time (HH : MM)</Text>
-                <View style={s.sheetRow}>
-                  <TextInput
-                    style={[s.sheetInput, s.sheetInputHalf]}
-                    value={form.startHour}
-                    onChangeText={(v) => setForm((f) => ({ ...f, startHour: v }))}
-                    placeholder="09"
-                    placeholderTextColor={Colors.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={2}
+                <Text style={s.sheetLabel}>Start time</Text>
+                <TouchableOpacity
+                  style={[s.sheetInput, localStyles.pickerRow]}
+                  onPress={() =>
+                    setActivePicker((p) => (p === 'startTime' ? null : 'startTime'))
+                  }
+                  activeOpacity={0.7}
+                >
+                  <Text style={localStyles.pickerValue}>
+                    {formatTimeShort(form.startTime)}
+                  </Text>
+                  <Ionicons
+                    name="time-outline"
+                    size={18}
+                    color={Colors.textMuted}
                   />
-                  <TextInput
-                    style={[s.sheetInput, s.sheetInputHalf]}
-                    value={form.startMin}
-                    onChangeText={(v) => setForm((f) => ({ ...f, startMin: v }))}
-                    placeholder="00"
-                    placeholderTextColor={Colors.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={2}
+                </TouchableOpacity>
+                {activePicker === 'startTime' && (
+                  <DateTimePicker
+                    value={form.startTime}
+                    mode="time"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    themeVariant="dark"
+                    accentColor={Colors.primary}
+                    minuteInterval={5}
+                    onChange={(_, picked) => {
+                      if (Platform.OS !== 'ios') setActivePicker(null);
+                      if (picked)
+                        setForm((f) => {
+                          // Auto-shift end so it stays at least 30 min after
+                          // the new start, but only when end is now <= start.
+                          const next = { ...f, startTime: picked };
+                          if (picked.getTime() >= f.endTime.getTime()) {
+                            const e = new Date(picked);
+                            e.setMinutes(e.getMinutes() + 60);
+                            next.endTime = e;
+                          }
+                          return next;
+                        });
+                    }}
                   />
-                </View>
+                )}
               </View>
 
               {/* End time */}
               <View>
-                <Text style={s.sheetLabel}>End time (HH : MM)</Text>
-                <View style={s.sheetRow}>
-                  <TextInput
-                    style={[s.sheetInput, s.sheetInputHalf]}
-                    value={form.endHour}
-                    onChangeText={(v) => setForm((f) => ({ ...f, endHour: v }))}
-                    placeholder="10"
-                    placeholderTextColor={Colors.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={2}
+                <Text style={s.sheetLabel}>End time</Text>
+                <TouchableOpacity
+                  style={[s.sheetInput, localStyles.pickerRow]}
+                  onPress={() =>
+                    setActivePicker((p) => (p === 'endTime' ? null : 'endTime'))
+                  }
+                  activeOpacity={0.7}
+                >
+                  <Text style={localStyles.pickerValue}>
+                    {formatTimeShort(form.endTime)}
+                  </Text>
+                  <Ionicons
+                    name="time-outline"
+                    size={18}
+                    color={Colors.textMuted}
                   />
-                  <TextInput
-                    style={[s.sheetInput, s.sheetInputHalf]}
-                    value={form.endMin}
-                    onChangeText={(v) => setForm((f) => ({ ...f, endMin: v }))}
-                    placeholder="00"
-                    placeholderTextColor={Colors.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={2}
+                </TouchableOpacity>
+                {activePicker === 'endTime' && (
+                  <DateTimePicker
+                    value={form.endTime}
+                    mode="time"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    themeVariant="dark"
+                    accentColor={Colors.primary}
+                    minuteInterval={5}
+                    onChange={(_, picked) => {
+                      if (Platform.OS !== 'ios') setActivePicker(null);
+                      if (picked) setForm((f) => ({ ...f, endTime: picked }));
+                    }}
                   />
-                </View>
+                )}
               </View>
 
               {/* Block type (create only) */}
@@ -698,5 +857,26 @@ const localStyles = StyleSheet.create({
     fontFamily: Fonts.bodyMedium,
     fontSize: FontSizes.base,
     color: Colors.textSecondary,
+  },
+  // ── Picker rows (date / time) in the add/edit block modal ────────────
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pickerValue: {
+    fontFamily: Fonts.body,
+    fontSize: FontSizes.base,
+    color: Colors.textPrimary,
+  },
+  // ── Task row (Due today list) ────────────────────────────────────────
+  taskCheckBtn: {
+    paddingHorizontal: 2,
+    marginRight: 8,
+    flexShrink: 0,
+  },
+  taskTitleDone: {
+    color: Colors.textMuted,
+    textDecorationLine: 'line-through' as const,
   },
 });
