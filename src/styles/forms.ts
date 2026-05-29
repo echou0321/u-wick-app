@@ -39,6 +39,9 @@ export const formStyles = StyleSheet.create({
     color: Colors.primaryLight,
     letterSpacing: -1.5,
   },
+  wordmarkUW: {
+    color: Colors.primary,
+  },
   card: {
     backgroundColor: Colors.surface,
     borderRadius: 20,

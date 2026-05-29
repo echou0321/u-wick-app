@@ -73,7 +73,7 @@ export default function LoginScreen() {
       >
         <View style={styles.logo}>
           <Text style={styles.mark}>✦</Text>
-          <Text style={styles.wordmark}>Wick</Text>
+          <Text style={styles.wordmark}><Text style={styles.wordmarkUW}>UW</Text>ick</Text>
         </View>
 
         <View style={styles.card}>
